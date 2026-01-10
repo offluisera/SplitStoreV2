@@ -52,16 +52,34 @@ const initParticles = () => {
   }
 };
 
-// Verificar autenticação
+// Verificar autenticação via URL ou localStorage
 const checkAuth = () => {
-  const token = localStorage.getItem('auth_token');
-  const user = localStorage.getItem('user');
+  // 1. Verificar se veio token na URL (redirecionamento do auth)
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlToken = urlParams.get('token');
+  const urlUser = urlParams.get('user');
   
-  if (!token || !user) {
-    window.location.href = 'https://auth.splitstore.com.br/login';
-    return false;
+  if (urlToken && urlUser) {
+    // Salvar token e user do URL
+    localStorage.setItem('auth_token', urlToken);
+    localStorage.setItem('user', urlUser);
+    
+    // Limpar URL sem recarregar a página
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return true;
   }
-  return true;
+  
+  // 2. Verificar se já tem token no localStorage
+  const storedToken = localStorage.getItem('auth_token');
+  const storedUser = localStorage.getItem('user');
+  
+  if (storedToken && storedUser) {
+    return true;
+  }
+  
+  // 3. Se não tem token, redirecionar para auth
+  window.location.href = 'https://auth.splitstore.com.br/login';
+  return false;
 };
 
 if (checkAuth()) {
