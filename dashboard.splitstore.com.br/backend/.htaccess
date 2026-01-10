@@ -1,0 +1,11 @@
+# Permitir acesso aos arquivos PHP do backend
+<FilesMatch "\.php$">
+    Order allow,deny
+    Allow from all
+</FilesMatch>
+
+# Negar acesso direto a outros arquivos
+<FilesMatch "(?<!\.php)$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
