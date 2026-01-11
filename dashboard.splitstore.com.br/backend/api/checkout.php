@@ -141,7 +141,6 @@ try {
         'plan_id' => $planId,
         'customer_name' => $user['nome'],
         'customer_email' => $user['email'],
-        'customer_document' => null,
         'store_slug' => $storeSlug,
         'store_name' => $storeName,
         'user_id' => $user['id'],
@@ -168,20 +167,13 @@ try {
         ]));
     }
     
-    // Extrair dados do pagamento
+    // Extrair dados do pagamento - Estrutura correta da MisticPay
     $paymentData = $payment['data'];
-    $paymentId = $paymentData['id'] ?? $paymentData['transaction_id'] ?? null;
     
-    // Diferentes estruturas possíveis da API
-    $pixCode = $paymentData['pix_code'] ?? 
-               $paymentData['pix']['code'] ?? 
-               $paymentData['payment']['pix_code'] ?? 
-               null;
-               
-    $qrCodeBase64 = $paymentData['qr_code_base64'] ?? 
-                    $paymentData['pix']['qr_code'] ?? 
-                    $paymentData['payment']['qr_code'] ?? 
-                    null;
+    // A resposta da MisticPay geralmente vem assim:
+    $paymentId = $paymentData['id'] ?? null;
+    $pixCode = $paymentData['pix']['qr_code'] ?? $paymentData['pix_code'] ?? null;
+    $qrCodeBase64 = $paymentData['pix']['qr_code_image'] ?? $paymentData['qr_code_base64'] ?? null;
     
     error_log("Payment ID: " . ($paymentId ?? 'NULL'));
     error_log("PIX Code: " . ($pixCode ? 'PRESENTE' : 'NULL'));
@@ -204,7 +196,7 @@ try {
         'plan_name' => "Plano {$plan['name']}",
         'store_name' => $storeName,
         'store_slug' => $storeSlug,
-        'raw_response' => $paymentData, // Para debug
+        'expires_in' => 600, // 10 minutos
         'message' => 'Checkout criado com sucesso!'
     ]);
     

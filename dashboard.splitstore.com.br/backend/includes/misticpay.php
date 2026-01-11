@@ -4,22 +4,21 @@
 class MisticPay {
     private $clientId = 'ci_6wqrtigx1d8e430';
     private $clientSecret = 'cs_w810l4jlhnqs60rrmxh8xgd2u';
-    private $apiUrl = 'https://api.misticpay.com/api'; // URL CORRIGIDA
+    private $apiUrl = 'https://api.misticpay.com/v1'; // CORRIGIDO: /v1 ao invés de /api
     
     /**
-     * Criar um novo pagamento
+     * Criar um novo pagamento PIX
      */
     public function createPayment($data) {
-        // Payload segundo documentação MisticPay
+        // Payload correto segundo documentação MisticPay
         $payload = [
-            'amount' => number_format($data['amount'], 2, '.', ''), // Garantir formato decimal
+            'amount' => floatval($data['amount']), // Valor em float
             'currency' => 'BRL',
-            'payment_method' => 'pix', // Método de pagamento
+            'payment_method' => 'pix',
             'description' => $data['description'] ?? 'Assinatura SplitStore',
             'customer' => [
                 'name' => $data['customer_name'],
-                'email' => $data['customer_email'],
-                'document' => $data['customer_document'] ?? null
+                'email' => $data['customer_email']
             ],
             'metadata' => [
                 'plan_id' => $data['plan_id'],
@@ -28,7 +27,8 @@ class MisticPay {
                 'user_id' => $data['user_id'],
                 'pending_store_id' => $data['pending_store_id']
             ],
-            'callback_url' => 'https://dashboard.splitstore.com.br/webhooks/misticpay',
+            // IMPORTANTE: Use o domínio correto do seu site
+            'webhook_url' => 'https://dashboard.splitstore.com.br/backend/webhooks/misticpay.php',
             'return_url' => 'https://dashboard.splitstore.com.br?status=success'
         ];
         
@@ -68,13 +68,12 @@ class MisticPay {
     private function makeRequest($method, $endpoint, $data = null) {
         $url = $this->apiUrl . $endpoint;
         
-        // Autenticação Basic Auth
-        $auth = base64_encode($this->clientId . ':' . $this->clientSecret);
-        
+        // Headers corretos segundo documentação
         $headers = [
             'Content-Type: application/json',
             'Accept: application/json',
-            'Authorization: Basic ' . $auth
+            'X-Client-Id: ' . $this->clientId,
+            'X-Client-Secret: ' . $this->clientSecret
         ];
         
         error_log("=== MisticPay Request ===");
@@ -89,7 +88,6 @@ class MisticPay {
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_VERBOSE, true); // Ativar modo verbose para debug
         
         if ($data && in_array($method, ['POST', 'PUT', 'PATCH'])) {
             $jsonData = json_encode($data);
@@ -119,7 +117,6 @@ class MisticPay {
         
         $result = json_decode($response, true);
         
-        // Verificar se a resposta é válida
         if (json_last_error() !== JSON_ERROR_NONE) {
             error_log("JSON Decode Error: " . json_last_error_msg());
             return [
