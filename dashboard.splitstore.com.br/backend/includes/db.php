@@ -2,9 +2,9 @@
 // backend/includes/db.php
 
 $host = 'localhost';
-$dbname = 'splitstore_auth'; // Usando o banco que você já tem
-$username = 'splitstore_auth'; // Ajuste conforme seu usuário do MySQL
-$password = 'Hn2FY2823ZWGbAyH'; // Altere para sua senha real
+$dbname = 'splitstore_auth';
+$username = 'splitstore_auth';
+$password = 'Hn2FY2823ZWGbAyH';
 
 try {
     $pdo = new PDO(

@@ -15,7 +15,7 @@ require_once __DIR__ . '/../includes/misticpay.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    die(json_encode(['error' => 'Método não permitido']));
+    die(json_encode(['success' => false, 'error' => 'Método não permitido']));
 }
 
 try {
@@ -24,13 +24,19 @@ try {
     
     $data = json_decode(file_get_contents('php://input'), true);
     
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        throw new Exception('JSON inválido: ' . json_last_error_msg());
+    }
+    
+    error_log("Dados recebidos: " . json_encode($data));
+    
     // Validar token do usuário
     $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
     $token = str_replace('Bearer ', '', $authHeader);
     
     if (empty($token)) {
         http_response_code(401);
-        die(json_encode(['error' => 'Token não fornecido']));
+        die(json_encode(['success' => false, 'error' => 'Token não fornecido']));
     }
     
     // Buscar usuário pelo token
@@ -46,12 +52,12 @@ try {
     if (!$user) {
         error_log("Token inválido ou expirado");
         http_response_code(401);
-        die(json_encode(['error' => 'Sessão inválida']));
+        die(json_encode(['success' => false, 'error' => 'Sessão inválida']));
     }
     
     error_log("Usuário autenticado: {$user['nome']} (ID: {$user['id']})");
     
-    // Validar dados
+    // Validar dados obrigatórios
     $planId = $data['plan_id'] ?? '';
     $storeName = trim($data['store_name'] ?? '');
     $storeSlug = trim($data['store_slug'] ?? '');
@@ -59,7 +65,7 @@ try {
     
     if (empty($planId) || empty($storeName) || empty($storeSlug)) {
         http_response_code(400);
-        die(json_encode(['error' => 'Dados incompletos']));
+        die(json_encode(['success' => false, 'error' => 'Dados incompletos']));
     }
     
     // Verificar se slug já existe
@@ -67,7 +73,7 @@ try {
     $stmt->execute([$storeSlug]);
     if ($stmt->fetch()) {
         http_response_code(400);
-        die(json_encode(['error' => 'Este slug já está em uso']));
+        die(json_encode(['success' => false, 'error' => 'Este slug já está em uso']));
     }
     
     // Buscar informações do plano
@@ -79,7 +85,7 @@ try {
     
     if (!isset($plans[$planId])) {
         http_response_code(400);
-        die(json_encode(['error' => 'Plano inválido']));
+        die(json_encode(['success' => false, 'error' => 'Plano inválido']));
     }
     
     $plan = $plans[$planId];
@@ -141,6 +147,7 @@ try {
         'plan_id' => $planId,
         'customer_name' => $user['nome'],
         'customer_email' => $user['email'],
+        'customer_cpf' => '', // Opcional
         'store_slug' => $storeSlug,
         'store_name' => $storeName,
         'user_id' => $user['id'],
@@ -154,6 +161,7 @@ try {
     
     if (!$payment['success']) {
         error_log("❌ Erro ao criar pagamento na MisticPay");
+        error_log("Error: " . ($payment['error'] ?? 'Unknown'));
         
         // Marcar pending_store como failed
         $stmt = $pdo->prepare("UPDATE pending_stores SET status = 'failed' WHERE id = ?");
@@ -161,32 +169,63 @@ try {
         
         http_response_code(500);
         die(json_encode([
-            'error' => 'Erro ao criar pagamento',
+            'success' => false,
+            'error' => 'Erro ao criar pagamento: ' . ($payment['error'] ?? 'Erro desconhecido'),
             'details' => $payment['data'] ?? null,
             'http_code' => $payment['http_code']
         ]));
     }
     
-    // Extrair dados do pagamento - Estrutura correta da MisticPay
+    // Extrair dados do pagamento
     $paymentData = $payment['data'];
     
-    // A resposta da MisticPay geralmente vem assim:
-    $paymentId = $paymentData['id'] ?? null;
-    $pixCode = $paymentData['pix']['qr_code'] ?? $paymentData['pix_code'] ?? null;
-    $qrCodeBase64 = $paymentData['pix']['qr_code_image'] ?? $paymentData['qr_code_base64'] ?? null;
+    // Tentar diferentes estruturas da resposta da MisticPay
+    $paymentId = $paymentData['id'] ?? $paymentData['payment_id'] ?? null;
+    
+    // PIX Code pode vir em vários formatos
+    $pixCode = $paymentData['pix']['qr_code'] ?? 
+               $paymentData['pix']['code'] ?? 
+               $paymentData['pix_code'] ?? 
+               $paymentData['qr_code'] ?? 
+               $paymentData['code'] ?? null;
+    
+    // QR Code Base64
+    $qrCodeBase64 = $paymentData['pix']['qr_code_image'] ?? 
+                    $paymentData['pix']['image'] ?? 
+                    $paymentData['qr_code_image'] ?? 
+                    $paymentData['qr_code_base64'] ?? null;
     
     error_log("Payment ID: " . ($paymentId ?? 'NULL'));
-    error_log("PIX Code: " . ($pixCode ? 'PRESENTE' : 'NULL'));
+    error_log("PIX Code: " . ($pixCode ? 'PRESENTE (' . strlen($pixCode) . ' chars)' : 'NULL'));
     error_log("QR Code: " . ($qrCodeBase64 ? 'PRESENTE' : 'NULL'));
     
-    // Atualizar pending_store com payment_id
-    if ($paymentId) {
-        $stmt = $pdo->prepare("UPDATE pending_stores SET payment_id = ? WHERE id = ?");
-        $stmt->execute([$paymentId, $pendingStoreId]);
+    // Validar dados essenciais
+    if (!$paymentId) {
+        error_log("❌ Payment ID não encontrado na resposta!");
+        http_response_code(500);
+        die(json_encode([
+            'success' => false,
+            'error' => 'Payment ID não retornado pela API',
+            'response_structure' => array_keys($paymentData)
+        ]));
     }
     
-    // RETORNAR DADOS DO PIX PARA O FRONTEND
-    echo json_encode([
+    if (!$pixCode) {
+        error_log("❌ PIX Code não encontrado na resposta!");
+        http_response_code(500);
+        die(json_encode([
+            'success' => false,
+            'error' => 'Código PIX não retornado pela API',
+            'response_structure' => array_keys($paymentData)
+        ]));
+    }
+    
+    // Atualizar pending_store com payment_id
+    $stmt = $pdo->prepare("UPDATE pending_stores SET payment_id = ? WHERE id = ?");
+    $stmt->execute([$paymentId, $pendingStoreId]);
+    
+    // RETORNO PADRONIZADO
+    $response = [
         'success' => true,
         'payment_id' => $paymentId,
         'pending_store_id' => $pendingStoreId,
@@ -198,17 +237,37 @@ try {
         'store_slug' => $storeSlug,
         'expires_in' => 600, // 10 minutos
         'message' => 'Checkout criado com sucesso!'
+    ];
+    
+    error_log("=== CHECKOUT SUCCESS ===");
+    error_log("Response: " . json_encode($response));
+    
+    echo json_encode($response);
+    
+} catch (PDOException $e) {
+    error_log("=== CHECKOUT DATABASE ERROR ===");
+    error_log("Error: " . $e->getMessage());
+    error_log("File: " . $e->getFile());
+    error_log("Line: " . $e->getLine());
+    
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'error' => 'Erro de banco de dados',
+        'message' => 'Erro ao processar checkout',
+        'details' => $e->getMessage()
     ]);
     
 } catch (Exception $e) {
     error_log("=== CHECKOUT ERROR ===");
-    error_log("Erro: " . $e->getMessage());
+    error_log("Error: " . $e->getMessage());
     error_log("File: " . $e->getFile());
     error_log("Line: " . $e->getLine());
     error_log("Stack: " . $e->getTraceAsString());
     
     http_response_code(500);
     echo json_encode([
+        'success' => false,
         'error' => 'Erro ao processar checkout',
         'message' => $e->getMessage(),
         'file' => $e->getFile(),

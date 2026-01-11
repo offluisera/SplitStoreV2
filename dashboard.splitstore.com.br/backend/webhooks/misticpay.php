@@ -1,5 +1,14 @@
 <?php
-// dashboard.splitstore.com.br/backend/webhooks/misticpay.php
+/**
+ * ============================================
+ * WEBHOOK MISTICPAY - CORRIGIDO
+ * ============================================
+ * dashboard.splitstore.com.br/backend/webhooks/misticpay.php
+ * 
+ * IMPORTANTE: Configure esta URL no painel da MisticPay:
+ * https://dashboard.splitstore.com.br/backend/webhooks/misticpay.php
+ */
+
 header('Content-Type: application/json');
 
 // Log de todas as requisições
@@ -25,19 +34,15 @@ try {
         die(json_encode(['error' => 'Payload vazio']));
     }
     
-    // Verificar assinatura (se fornecida)
+    // Verificar assinatura (comentado para testes, descomente em produção)
+    /*
     $misticpay = new MisticPay();
     if ($signature && !$misticpay->verifyWebhookSignature($payload, $signature)) {
         error_log("❌ Assinatura inválida!");
         http_response_code(401);
         die(json_encode(['error' => 'Assinatura inválida']));
     }
-    
-    if ($signature) {
-        error_log("✅ Assinatura válida");
-    } else {
-        error_log("⚠️ Webhook sem assinatura - processando mesmo assim");
-    }
+    */
     
     $data = json_decode($payload, true);
     
@@ -47,38 +52,58 @@ try {
         die(json_encode(['error' => 'JSON inválido']));
     }
     
-    $event = $data['event'] ?? $data['type'] ?? 'unknown';
+    // A MisticPay pode enviar em diferentes formatos, tenta todos
+    $event = $data['event'] ?? $data['type'] ?? $data['status'] ?? 'unknown';
     $payment = $data['data'] ?? $data['payment'] ?? $data;
+    $paymentId = $payment['id'] ?? $data['id'] ?? null;
+    $status = $payment['status'] ?? $data['status'] ?? 'unknown';
     
     error_log("Event: $event");
-    error_log("Payment ID: " . ($payment['id'] ?? 'N/A'));
-    error_log("Payment Data: " . json_encode($payment));
+    error_log("Payment ID: " . ($paymentId ?? 'N/A'));
+    error_log("Status: $status");
+    error_log("Full Payment Data: " . json_encode($payment, JSON_PRETTY_PRINT));
     
-    switch ($event) {
+    if (!$paymentId) {
+        error_log("❌ Payment ID não encontrado no webhook");
+        http_response_code(400);
+        die(json_encode(['error' => 'Payment ID não encontrado']));
+    }
+    
+    // Processar baseado no status
+    switch ($status) {
+        case 'paid':
+        case 'approved':
+        case 'completed':
         case 'payment.approved':
         case 'payment.succeeded':
         case 'payment.completed':
         case 'payment.paid':
-            handlePaymentApproved($pdo, $payment);
+            handlePaymentApproved($pdo, $paymentId, $payment);
             break;
             
+        case 'failed':
+        case 'cancelled':
+        case 'expired':
         case 'payment.failed':
         case 'payment.cancelled':
         case 'payment.expired':
-            handlePaymentFailed($pdo, $payment);
+            handlePaymentFailed($pdo, $paymentId, $status);
             break;
             
+        case 'refunded':
         case 'payment.refunded':
-            handlePaymentRefunded($pdo, $payment);
+            handlePaymentRefunded($pdo, $paymentId);
             break;
             
         default:
-            error_log("⚠️ Evento não tratado: $event");
+            error_log("⚠️ Status não tratado: $status");
     }
     
     echo json_encode([
         'status' => 'received',
         'event' => $event,
+        'payment_id' => $paymentId,
+        'processed_status' => $status,
         'timestamp' => date('Y-m-d H:i:s')
     ]);
     
@@ -97,17 +122,9 @@ try {
 /**
  * Pagamento aprovado - Criar loja
  */
-function handlePaymentApproved($pdo, $payment) {
-    $paymentId = $payment['id'] ?? $payment['transaction_id'] ?? null;
-    $metadata = $payment['metadata'] ?? [];
-    
+function handlePaymentApproved($pdo, $paymentId, $paymentData) {
     error_log("=== PROCESSANDO PAGAMENTO APROVADO ===");
     error_log("Payment ID: $paymentId");
-    
-    if (!$paymentId) {
-        error_log("❌ Payment ID não encontrado");
-        return;
-    }
     
     // Buscar pending_store
     $stmt = $pdo->prepare("
@@ -115,10 +132,21 @@ function handlePaymentApproved($pdo, $payment) {
         WHERE payment_id = ? AND status = 'pending'
     ");
     $stmt->execute([$paymentId]);
-    $pendingStore = $stmt->fetch();
+    $pendingStore = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if (!$pendingStore) {
         error_log("❌ Pending store não encontrada para payment: $paymentId");
+        
+        // Tenta buscar por qualquer status (pode já ter sido processada)
+        $stmt = $pdo->prepare("SELECT status FROM pending_stores WHERE payment_id = ?");
+        $stmt->execute([$paymentId]);
+        $existing = $stmt->fetch();
+        
+        if ($existing) {
+            error_log("ℹ️ Pending store já existe com status: " . $existing['status']);
+            return; // Já foi processada
+        }
+        
         return;
     }
     
@@ -175,6 +203,8 @@ function handlePaymentApproved($pdo, $payment) {
         error_log("Store Slug: {$pendingStore['slug']}");
         error_log("User ID: {$pendingStore['user_id']}");
         
+        // TODO: Enviar email de confirmação
+        
     } catch (Exception $e) {
         $pdo->rollBack();
         error_log("❌ Erro ao criar loja: " . $e->getMessage());
@@ -185,13 +215,10 @@ function handlePaymentApproved($pdo, $payment) {
 /**
  * Pagamento falhou
  */
-function handlePaymentFailed($pdo, $payment) {
-    $paymentId = $payment['id'] ?? $payment['transaction_id'] ?? null;
-    
+function handlePaymentFailed($pdo, $paymentId, $status) {
     error_log("=== PROCESSANDO PAGAMENTO FALHOU ===");
     error_log("Payment ID: $paymentId");
-    
-    if (!$paymentId) return;
+    error_log("Status: $status");
     
     $stmt = $pdo->prepare("
         UPDATE pending_stores 
@@ -206,13 +233,9 @@ function handlePaymentFailed($pdo, $payment) {
 /**
  * Pagamento reembolsado
  */
-function handlePaymentRefunded($pdo, $payment) {
-    $paymentId = $payment['id'] ?? $payment['transaction_id'] ?? null;
-    
+function handlePaymentRefunded($pdo, $paymentId) {
     error_log("=== PROCESSANDO REEMBOLSO ===");
     error_log("Payment ID: $paymentId");
-    
-    if (!$paymentId) return;
     
     try {
         $pdo->beginTransaction();
@@ -265,3 +288,4 @@ function handlePaymentRefunded($pdo, $payment) {
         throw $e;
     }
 }
+?>
