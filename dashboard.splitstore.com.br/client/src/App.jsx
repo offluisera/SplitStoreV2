@@ -1,6 +1,5 @@
-// dashboard.splitstore.com.br/client/src/App.jsx
 import { useState } from 'react';
-import { ChevronRight, Check, Zap, Shield, TrendingUp, X, AlertCircle, Loader, Copy, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { ChevronRight, Check, Zap, Shield, TrendingUp, X, AlertCircle, Loader, Copy, Clock, CheckCircle, XCircle, CreditCard, Barcode } from 'lucide-react';
 
 // ============= COMPONENTE: PlanCard =============
 const PlanCard = ({ plan, isPopular, isSelected, onSelect }) => {
@@ -101,9 +100,8 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     
-    // Formatar CPF automaticamente
     if (name === 'customerCpf') {
-      const cpfValue = value.replace(/\D/g, ''); // Remove tudo que não é número
+      const cpfValue = value.replace(/\D/g, '');
       let formatted = cpfValue;
       
       if (cpfValue.length <= 11) {
@@ -113,17 +111,11 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
           .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
       }
       
-      setFormData(prev => ({
-        ...prev,
-        [name]: formatted
-      }));
+      setFormData(prev => ({ ...prev, [name]: formatted }));
       return;
     }
     
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
 
     if (name === 'storeName') {
       const slug = value
@@ -146,9 +138,7 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
     try {
       const response = await fetch('/api/checkout/validate-coupon', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: formData.couponCode })
       });
 
@@ -182,18 +172,11 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
   };
 
   const handleSubmit = () => {
-    console.log('=== SUBMIT FORM ===');
-    console.log('Store Name:', formData.storeName);
-    console.log('Store Slug:', formData.storeSlug);
-    console.log('Customer CPF:', formData.customerCpf);
-    console.log('Slug Error:', slugError);
-    
     if (!formData.storeName || !formData.storeSlug || !formData.customerCpf || slugError) {
       alert('Por favor, preencha todos os campos obrigatórios');
       return;
     }
 
-    // Validar CPF (11 dígitos)
     const cpfClean = formData.customerCpf.replace(/\D/g, '');
     if (cpfClean.length !== 11) {
       alert('CPF inválido. Digite 11 números.');
@@ -209,16 +192,12 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
       total: calculateTotal()
     };
     
-    console.log('Dados para enviar:', submitData);
     onNext(submitData);
   };
 
   return (
     <div className="max-w-2xl mx-auto animate-fade-in">
-      <button
-        onClick={onBack}
-        className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-8"
-      >
+      <button onClick={onBack} className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-8">
         <ChevronRight className="w-4 h-4 rotate-180" />
         Voltar aos planos
       </button>
@@ -226,9 +205,7 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
       <div className="bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/10 rounded-3xl p-8">
         <div className="text-center mb-8">
           <h2 className="text-3xl font-black mb-2">Configure sua loja</h2>
-          <p className="text-zinc-400">
-            Preencha os dados para criar sua loja no plano {selectedPlan.name}
-          </p>
+          <p className="text-zinc-400">Preencha os dados para criar sua loja no plano {selectedPlan.name}</p>
         </div>
 
         <div className="bg-red-600/10 border border-red-600/20 rounded-xl p-6 mb-8">
@@ -239,18 +216,14 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
             </div>
             <div className="text-right">
               <p className="text-sm text-zinc-400 mb-1">Valor mensal</p>
-              <p className="text-2xl font-black text-red-600">
-                R$ {selectedPlan.price}
-              </p>
+              <p className="text-2xl font-black text-red-600">R$ {selectedPlan.price}</p>
             </div>
           </div>
         </div>
 
         <div className="space-y-6 mb-8">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
-              Nome da Loja *
-            </label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Nome da Loja *</label>
             <input
               type="text"
               name="storeName"
@@ -263,9 +236,7 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
-              URL da Loja *
-            </label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">URL da Loja *</label>
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -287,9 +258,7 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
-              CPF do Titular *
-            </label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">CPF do Titular *</label>
             <input
               type="text"
               name="customerCpf"
@@ -300,15 +269,11 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
               placeholder="000.000.000-00"
               required
             />
-            <p className="mt-2 text-xs text-zinc-500">
-              CPF necessário para geração do pagamento PIX
-            </p>
+            <p className="mt-2 text-xs text-zinc-500">CPF necessário para geração do pagamento</p>
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
-              Cupom de Desconto
-            </label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Cupom de Desconto</label>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -369,9 +334,7 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
           )}
           <div className="border-t border-white/10 pt-4 flex items-center justify-between">
             <span className="text-xl font-bold">Total</span>
-            <span className="text-3xl font-black text-red-600">
-              R$ {calculateTotal()}
-            </span>
+            <span className="text-3xl font-black text-red-600">R$ {calculateTotal()}</span>
           </div>
         </div>
 
@@ -380,7 +343,7 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
           disabled={!formData.storeName || !formData.storeSlug || !formData.customerCpf || !!slugError}
           className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-xl font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2"
         >
-          Prosseguir para Pagamento
+          Escolher Forma de Pagamento
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
@@ -388,11 +351,180 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
   );
 };
 
+// ============= COMPONENTE: PaymentMethodSelector =============
+const PaymentMethodSelector = ({ amount, storeData, onSelect, onBack }) => {
+  const [selectedMethod, setSelectedMethod] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const paymentMethods = [
+    {
+      id: 'pix',
+      name: 'PIX',
+      description: 'Aprovação instantânea',
+      icon: <Zap className="w-8 h-8" />,
+      badge: 'Mais Rápido',
+      badgeColor: 'bg-green-600',
+      features: ['Aprovação imediata', 'Disponível 24/7', 'Sem taxas adicionais'],
+      gradient: 'from-green-600/20 to-emerald-600/20',
+      borderColor: 'border-green-600/30'
+    },
+    {
+      id: 'credit_card',
+      name: 'Cartão de Crédito',
+      description: 'Parcelamento disponível',
+      icon: <CreditCard className="w-8 h-8" />,
+      badge: 'Parcelado',
+      badgeColor: 'bg-blue-600',
+      features: ['Até 12x sem juros', 'Aprovação em minutos', 'Todas as bandeiras'],
+      gradient: 'from-blue-600/20 to-indigo-600/20',
+      borderColor: 'border-blue-600/30'
+    },
+    {
+      id: 'boleto',
+      name: 'Boleto Bancário',
+      description: 'Vencimento em 3 dias',
+      icon: <Barcode className="w-8 h-8" />,
+      badge: 'Tradicional',
+      badgeColor: 'bg-orange-600',
+      features: ['Pague em qualquer banco', 'Sem necessidade de cartão', 'Aprovação em até 2 dias úteis'],
+      gradient: 'from-orange-600/20 to-amber-600/20',
+      borderColor: 'border-orange-600/30'
+    }
+  ];
+
+  const handleContinue = () => {
+    if (!selectedMethod) return;
+    setLoading(true);
+    setTimeout(() => {
+      onSelect(selectedMethod);
+      setLoading(false);
+    }, 500);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto animate-fade-in">
+      <button onClick={onBack} className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-8">
+        <ChevronRight className="w-4 h-4 rotate-180" />
+        Voltar
+      </button>
+
+      <div className="bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/10 rounded-3xl p-8">
+        <div className="text-center mb-10">
+          <h2 className="text-4xl font-black mb-3">Escolha a forma de <span className="text-red-600">pagamento</span></h2>
+          <p className="text-zinc-400 text-lg">Selecione o método que preferir para finalizar sua compra</p>
+        </div>
+
+        <div className="bg-gradient-to-r from-red-600/20 to-red-900/20 border border-red-600/30 rounded-2xl p-6 mb-10">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-zinc-400 mb-1">Valor total</p>
+              <p className="text-3xl font-black text-red-600">R$ {amount}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-zinc-400 mb-1">Loja</p>
+              <p className="text-xl font-bold">{storeData.storeName}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-6 mb-10">
+          {paymentMethods.map((method) => (
+            <div
+              key={method.id}
+              onClick={() => setSelectedMethod(method.id)}
+              className={`relative cursor-pointer rounded-2xl p-6 transition-all ${
+                selectedMethod === method.id ? 'scale-105 shadow-2xl' : 'hover:scale-102'
+              } bg-gradient-to-br ${method.gradient} border ${
+                selectedMethod === method.id ? 'border-white/30' : method.borderColor
+              }`}
+            >
+              <div className={`absolute -top-3 left-1/2 -translate-x-1/2 ${method.badgeColor} text-white text-xs font-black uppercase px-4 py-1.5 rounded-full shadow-lg`}>
+                {method.badge}
+              </div>
+
+              {selectedMethod === method.id && (
+                <div className="absolute -top-3 -right-3">
+                  <div className="bg-white text-green-600 rounded-full p-1.5 shadow-lg">
+                    <Check className="w-4 h-4" />
+                  </div>
+                </div>
+              )}
+
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 mx-auto ${
+                selectedMethod === method.id ? 'bg-white/20' : 'bg-white/10'
+              }`}>
+                <div className={selectedMethod === method.id ? 'text-white' : 'text-zinc-300'}>
+                  {method.icon}
+                </div>
+              </div>
+
+              <div className="text-center mb-4">
+                <h3 className="text-xl font-black mb-1">{method.name}</h3>
+                <p className="text-sm text-zinc-400">{method.description}</p>
+              </div>
+
+              <div className="space-y-2">
+                {method.features.map((feature, idx) => (
+                  <div key={idx} className="flex items-start gap-2 text-xs text-zinc-300">
+                    <div className="flex-shrink-0 w-4 h-4 rounded-full bg-white/10 flex items-center justify-center mt-0.5">
+                      <Check className="w-2.5 h-2.5" />
+                    </div>
+                    <span>{feature}</span>
+                  </div>
+                ))}
+              </div>
+
+              <button className={`w-full mt-6 py-3 rounded-xl font-bold uppercase text-sm transition-all ${
+                selectedMethod === method.id ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/15 text-white'
+              }`}>
+                {selectedMethod === method.id ? 'Selecionado' : 'Selecionar'}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-blue-600/10 border border-blue-600/20 rounded-xl p-6 mb-8">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold mb-2 text-blue-400">Informações importantes:</p>
+              <ul className="text-sm text-zinc-400 space-y-1">
+                <li>• Pagamentos via PIX são aprovados instantaneamente</li>
+                <li>• Cartões de crédito podem levar até 2 minutos para aprovação</li>
+                <li>• Boletos podem levar até 2 dias úteis para compensação</li>
+                <li>• Sua loja será ativada assim que o pagamento for confirmado</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={handleContinue}
+          disabled={!selectedMethod || loading}
+          className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-5 rounded-xl font-black uppercase tracking-wider transition-all flex items-center justify-center gap-3 text-lg"
+        >
+          {loading ? (
+            <>
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Processando...
+            </>
+          ) : (
+            <>
+              Continuar para Pagamento
+              <ChevronRight className="w-6 h-6" />
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ============= COMPONENTE: PaymentGateway =============
-const PaymentGateway = ({ selectedPlan, storeData, onBack }) => {
+const PaymentGateway = ({ selectedPlan, storeData, paymentMethod, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [pixData, setPixData] = useState(null);
+  const [paymentData, setPaymentData] = useState(null);
 
   const createCheckout = async () => {
     setLoading(true);
@@ -401,22 +533,14 @@ const PaymentGateway = ({ selectedPlan, storeData, onBack }) => {
     try {
       const token = localStorage.getItem('auth_token');
       
-      console.log('=== CRIANDO CHECKOUT ===');
-      console.log('Token:', token ? 'EXISTE' : 'NÃO EXISTE');
-      console.log('Plan ID:', selectedPlan.id);
-      console.log('Store Name:', storeData.storeName);
-      console.log('Store Slug:', storeData.storeSlug);
-      console.log('Coupon Code:', storeData.couponCode || 'NENHUM');
-
       const requestBody = {
         plan_id: selectedPlan.id,
         store_name: storeData.storeName,
         store_slug: storeData.storeSlug,
         customer_cpf: storeData.customerCpf,
-        coupon_code: storeData.couponCode || ''
+        coupon_code: storeData.couponCode || '',
+        payment_method: paymentMethod
       };
-
-      console.log('Request Body:', JSON.stringify(requestBody, null, 2));
 
       const response = await fetch('/api/checkout', {
         method: 'POST',
@@ -427,13 +551,10 @@ const PaymentGateway = ({ selectedPlan, storeData, onBack }) => {
         body: JSON.stringify(requestBody)
       });
 
-      console.log('Response Status:', response.status);
-
       const data = await response.json();
-      console.log('Response Data:', data);
 
       if (response.ok && data.success) {
-        setPixData(data);
+        setPaymentData(data);
         setLoading(false);
       } else {
         setError(data.error || 'Erro ao criar checkout');
@@ -458,7 +579,7 @@ const PaymentGateway = ({ selectedPlan, storeData, onBack }) => {
             <Loader className="w-10 h-10 text-red-600 animate-spin" />
           </div>
           <h2 className="text-3xl font-black mb-4">Processando...</h2>
-          <p className="text-zinc-400">Gerando seu pagamento PIX</p>
+          <p className="text-zinc-400">Gerando seu pagamento</p>
         </div>
       </div>
     );
@@ -471,7 +592,6 @@ const PaymentGateway = ({ selectedPlan, storeData, onBack }) => {
           <ChevronRight className="w-4 h-4 rotate-180" />
           Voltar
         </button>
-
         <div className="bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/10 rounded-3xl p-12 text-center">
           <div className="w-20 h-20 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
             <XCircle className="w-10 h-10 text-red-600" />
@@ -479,25 +599,34 @@ const PaymentGateway = ({ selectedPlan, storeData, onBack }) => {
           <h2 className="text-3xl font-black mb-4 text-red-600">Erro no Pagamento</h2>
           <p className="text-zinc-400 mb-8">{error}</p>
           <div className="flex gap-4 justify-center">
-            <button onClick={onBack} className="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold transition-all">
-              Voltar
-            </button>
-            <button onClick={createCheckout} className="px-8 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold transition-all">
-              Tentar Novamente
-            </button>
+            <button onClick={onBack} className="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold transition-all">Voltar</button>
+            <button onClick={createCheckout} className="px-8 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold transition-all">Tentar Novamente</button>
           </div>
         </div>
       </div>
     );
   }
 
-  if (pixData) {
-    return (
-      <PixPaymentScreen 
-        paymentData={pixData}
-        onBack={onBack}
-      />
-    );
+  if (paymentData) {
+    if (paymentMethod === 'pix') {
+      return <PixPaymentScreen paymentData={paymentData} onBack={onBack} />;
+    } else {
+      // Redirecionar para MercadoPago
+      if (paymentData.init_point) {
+        window.location.href = paymentData.init_point;
+        return (
+          <div className="max-w-2xl mx-auto animate-fade-in">
+            <div className="bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/10 rounded-3xl p-12 text-center">
+              <div className="w-20 h-20 bg-green-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle className="w-10 h-10 text-green-600" />
+              </div>
+              <h2 className="text-3xl font-black mb-4">Redirecionando...</h2>
+              <p className="text-zinc-400">Você será redirecionado para a página de pagamento</p>
+            </div>
+          </div>
+        );
+      }
+    }
   }
 
   return null;
@@ -533,25 +662,19 @@ const PixPaymentScreen = ({ paymentData, onBack }) => {
             <Clock className="w-5 h-5 text-orange-600" />
             <span className="text-sm text-zinc-400">Tempo restante</span>
           </div>
-          <span className="text-2xl font-black text-orange-600">
-            {formatTime(timeRemaining)}
-          </span>
+          <span className="text-2xl font-black text-orange-600">{formatTime(timeRemaining)}</span>
         </div>
 
         <div className="text-center mb-8">
           <h2 className="text-3xl font-black mb-2">Pague com PIX</h2>
-          <p className="text-zinc-400">
-            Escaneie o QR Code ou copie o código PIX
-          </p>
+          <p className="text-zinc-400">Escaneie o QR Code ou copie o código PIX</p>
         </div>
 
         <div className="bg-red-600/10 border border-red-600/20 rounded-xl p-6 mb-8">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-zinc-400 mb-1">Valor</p>
-              <p className="text-2xl font-black text-red-600">
-                R$ {paymentData.amount}
-              </p>
+              <p className="text-2xl font-black text-red-600">R$ {paymentData.amount}</p>
             </div>
             <div className="text-right">
               <p className="text-sm text-zinc-400 mb-1">Loja</p>
@@ -563,29 +686,18 @@ const PixPaymentScreen = ({ paymentData, onBack }) => {
         {paymentData.qr_code_base64 && (
           <div className="bg-white rounded-2xl p-8 mb-8">
             <div className="flex justify-center">
-              <img 
-                src={paymentData.qr_code_base64}
-                alt="QR Code PIX"
-                className="w-64 h-64"
-              />
+              <img src={paymentData.qr_code_base64} alt="QR Code PIX" className="w-64 h-64" />
             </div>
           </div>
         )}
 
         <div className="bg-black/50 rounded-xl p-6 mb-8">
-          <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
-            Código PIX Copia e Cola
-          </label>
+          <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">Código PIX Copia e Cola</label>
           <div className="flex gap-3">
             <div className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 overflow-hidden">
-              <p className="text-sm font-mono truncate text-zinc-300">
-                {paymentData.pix_code}
-              </p>
+              <p className="text-sm font-mono truncate text-zinc-300">{paymentData.pix_code}</p>
             </div>
-            <button
-              onClick={copyToClipboard}
-              className="px-6 bg-red-600 hover:bg-red-700 rounded-xl font-bold transition-all flex items-center gap-2 whitespace-nowrap"
-            >
+            <button onClick={copyToClipboard} className="px-6 bg-red-600 hover:bg-red-700 rounded-xl font-bold transition-all flex items-center gap-2 whitespace-nowrap">
               {copied ? (
                 <>
                   <Check className="w-5 h-5" />
@@ -602,9 +714,7 @@ const PixPaymentScreen = ({ paymentData, onBack }) => {
         </div>
 
         <div className="bg-green-600/10 border border-green-600/20 rounded-xl p-6">
-          <p className="text-sm text-green-400 text-center">
-            ✅ Após o pagamento, sua loja será ativada automaticamente!
-          </p>
+          <p className="text-sm text-green-400 text-center">✅ Após o pagamento, sua loja será ativada automaticamente!</p>
         </div>
       </div>
     </div>
@@ -616,6 +726,7 @@ const App = () => {
   const [step, setStep] = useState('plans');
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [storeData, setStoreData] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState(null);
 
   const plans = [
     {
@@ -625,12 +736,7 @@ const App = () => {
       price: '14,99',
       price_numeric: 14.99,
       icon: <Zap className="w-6 h-6 text-red-600" />,
-      features: [
-        '1 Servidor Minecraft',
-        'Checkout Responsivo',
-        'Suporte via Ticket',
-        'Plugin de Entrega'
-      ]
+      features: ['1 Servidor Minecraft', 'Checkout Responsivo', 'Suporte via Ticket', 'Plugin de Entrega']
     },
     {
       id: 'enterprise',
@@ -639,12 +745,7 @@ const App = () => {
       price: '25,99',
       price_numeric: 25.99,
       icon: <Shield className="w-6 h-6 text-red-600" />,
-      features: [
-        '5 Servidores',
-        'Checkout Customizável',
-        'Suporte Prioritário 24/7',
-        'Analytics Avançado'
-      ],
+      features: ['5 Servidores', 'Checkout Customizável', 'Suporte Prioritário 24/7', 'Analytics Avançado'],
       highlight: '🔥 Mais escolhido',
       isPopular: true
     },
@@ -655,12 +756,7 @@ const App = () => {
       price: '39,99',
       price_numeric: 39.99,
       icon: <TrendingUp className="w-6 h-6 text-red-600" />,
-      features: [
-        'Servidores Ilimitados',
-        'Whitelabel Completo',
-        'Gerente de Contas',
-        'Integrações Custom'
-      ]
+      features: ['Servidores Ilimitados', 'Whitelabel Completo', 'Gerente de Contas', 'Integrações Custom']
     }
   ];
 
@@ -672,22 +768,14 @@ const App = () => {
       <div className="relative z-10 max-w-7xl mx-auto py-12">
         <div className="text-center mb-16">
           <div className="inline-flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 bg-gradient-to-br from-red-600 to-red-900 rounded-xl flex items-center justify-center font-black">
-              S
-            </div>
-            <span className="text-2xl font-black tracking-tighter uppercase">
-              Split<span className="text-red-600">Store</span>
-            </span>
+            <div className="w-12 h-12 bg-gradient-to-br from-red-600 to-red-900 rounded-xl flex items-center justify-center font-black">S</div>
+            <span className="text-2xl font-black tracking-tighter uppercase">Split<span className="text-red-600">Store</span></span>
           </div>
           
           {step === 'plans' && (
             <>
-              <h1 className="text-5xl font-black mb-4">
-                Escolha seu <span className="text-red-600">Plano</span>
-              </h1>
-              <p className="text-zinc-400 text-lg">
-                Comece agora e transforme suas vendas
-              </p>
+              <h1 className="text-5xl font-black mb-4">Escolha seu <span className="text-red-600">Plano</span></h1>
+              <p className="text-zinc-400 text-lg">Comece agora e transforme suas vendas</p>
             </>
           )}
         </div>
@@ -701,7 +789,6 @@ const App = () => {
                 isPopular={plan.isPopular}
                 isSelected={selectedPlan?.id === plan.id}
                 onSelect={(p) => {
-                  console.log('Plano selecionado:', p);
                   setSelectedPlan(p);
                   setStep('setup');
                 }}
@@ -715,29 +802,39 @@ const App = () => {
             selectedPlan={selectedPlan}
             onBack={() => setStep('plans')}
             onNext={(data) => {
-              console.log('Dados do formulário:', data);
               setStoreData(data);
-              setStep('checkout');
+              setStep('payment_method');
             }}
           />
         )}
 
-        {step === 'checkout' && selectedPlan && storeData && (
-          <PaymentGateway
-            selectedPlan={selectedPlan}
+        {step === 'payment_method' && selectedPlan && storeData && (
+          <PaymentMethodSelector
+            amount={storeData.total}
             storeData={storeData}
+            onSelect={(method) => {
+              setPaymentMethod(method);
+              setStep('checkout');
+            }}
             onBack={() => setStep('setup')}
           />
         )}
 
+        {step === 'checkout' && selectedPlan && storeData && paymentMethod && (
+          <PaymentGateway
+            selectedPlan={selectedPlan}
+            storeData={storeData}
+            paymentMethod={paymentMethod}
+            onBack={() => setStep('payment_method')}
+          />
+        )}
+
         <div className="text-center mt-16">
-          <p className="text-zinc-700 text-xs">
-            © 2026 SplitStore • Todos os direitos reservados
-          </p>
+          <p className="text-zinc-700 text-xs">© 2026 SplitStore • Todos os direitos reservados</p>
         </div>
       </div>
     </div>
   );
 };
 
-export default App;
+export default App

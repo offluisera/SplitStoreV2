@@ -1,7 +1,7 @@
 <?php
 /**
  * ============================================
- * CHECKOUT API - CORRIGIDO PARA MISTICPAY
+ * CHECKOUT API - MULTI GATEWAY (PIX + CARTÃO + BOLETO)
  * ============================================
  * dashboard.splitstore.com.br/backend/api/checkout.php
  */
@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/misticpay.php';
+require_once __DIR__ . '/../includes/mercadopago.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -69,6 +70,7 @@ try {
     $storeSlug = trim($data['store_slug'] ?? '');
     $customerCpf = preg_replace('/[^0-9]/', '', $data['customer_cpf'] ?? '');
     $couponCode = trim($data['coupon_code'] ?? '');
+    $paymentMethod = $data['payment_method'] ?? 'pix'; // pix, credit_card, debit_card, boleto
     
     if (empty($planId) || empty($storeName) || empty($storeSlug) || empty($customerCpf)) {
         error_log("Dados incompletos - Plan: $planId, Store: $storeName, Slug: $storeSlug, CPF: $customerCpf");
@@ -133,12 +135,13 @@ try {
     }
     
     error_log("Plano: {$plan['name']} - Valor final: R$ $amount");
+    error_log("Método de pagamento: $paymentMethod");
     
     // Criar registro de pending_store
     $stmt = $pdo->prepare("
         INSERT INTO pending_stores 
-        (user_id, store_name, slug, plan_id, amount, discount, coupon_code, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+        (user_id, store_name, slug, plan_id, amount, discount, coupon_code, payment_method, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
     ");
     $stmt->execute([
         $user['id'],
@@ -147,85 +150,109 @@ try {
         $planId,
         $amount + $discount,
         $discount,
-        $couponCode ?: null
+        $couponCode ?: null,
+        $paymentMethod
     ]);
     $pendingStoreId = $pdo->lastInsertId();
     
     error_log("Pending Store criada - ID: $pendingStoreId");
     
-    // Criar pagamento na MisticPay
-    $misticpay = new MisticPay();
-    $payment = $misticpay->createPayment([
-        'amount' => $amount,
-        'description' => "Assinatura {$plan['name']} - SplitStore",
-        'plan_name' => "Plano {$plan['name']}",
-        'plan_id' => $planId,
-        'customer_name' => $user['nome'],
-        'customer_email' => $user['email'],
-        'customer_cpf' => $customerCpf, // CPF do formulário
-        'store_slug' => $storeSlug,
-        'store_name' => $storeName,
-        'user_id' => $user['id'],
-        'pending_store_id' => $pendingStoreId
-    ]);
+    // ============================================
+    // PROCESSAR PAGAMENTO BASEADO NO MÉTODO
+    // ============================================
     
-    error_log("=== RESPOSTA MISTICPAY ===");
-    error_log("Success: " . ($payment['success'] ? 'SIM' : 'NÃO'));
-    error_log("HTTP Code: " . $payment['http_code']);
-    error_log("Data: " . json_encode($payment['data']));
+    $response = null;
     
-    if (!$payment['success']) {
-        error_log("❌ Erro ao criar pagamento na MisticPay");
-        error_log("Error: " . ($payment['error'] ?? 'Unknown'));
+    if ($paymentMethod === 'pix') {
+        // Usar MisticPay para PIX
+        $misticpay = new MisticPay();
+        $payment = $misticpay->createPayment([
+            'amount' => $amount,
+            'description' => "Assinatura {$plan['name']} - SplitStore",
+            'plan_name' => "Plano {$plan['name']}",
+            'plan_id' => $planId,
+            'customer_name' => $user['nome'],
+            'customer_email' => $user['email'],
+            'customer_cpf' => $customerCpf,
+            'store_slug' => $storeSlug,
+            'store_name' => $storeName,
+            'user_id' => $user['id'],
+            'pending_store_id' => $pendingStoreId
+        ]);
         
-        // Marcar pending_store como failed
-        $stmt = $pdo->prepare("UPDATE pending_stores SET status = 'failed' WHERE id = ?");
-        $stmt->execute([$pendingStoreId]);
+        if (!$payment['success']) {
+            throw new Exception('Erro ao criar pagamento PIX: ' . ($payment['error'] ?? 'Erro desconhecido'));
+        }
         
-        http_response_code(500);
-        die(json_encode([
-            'success' => false,
-            'error' => 'Erro ao criar pagamento: ' . ($payment['error'] ?? 'Erro desconhecido'),
-            'details' => $payment['data'] ?? null,
-            'http_code' => $payment['http_code']
-        ]));
+        $pixData = $misticpay->extractPixData($payment);
+        
+        $stmt = $pdo->prepare("UPDATE pending_stores SET payment_id = ? WHERE id = ?");
+        $stmt->execute([$pixData['transaction_id'], $pendingStoreId]);
+        
+        $response = [
+            'success' => true,
+            'payment_method' => 'pix',
+            'payment_id' => $pixData['transaction_id'],
+            'pending_store_id' => $pendingStoreId,
+            'pix_code' => $pixData['qr_code'],
+            'qr_code_base64' => $pixData['qr_code_base64'],
+            'amount' => number_format($amount, 2, ',', '.'),
+            'plan_name' => "Plano {$plan['name']}",
+            'store_name' => $storeName,
+            'store_slug' => $storeSlug,
+            'expires_in' => 600
+        ];
+        
+    } elseif (in_array($paymentMethod, ['credit_card', 'debit_card', 'boleto'])) {
+        // Usar MercadoPago para Cartão/Boleto
+        $mercadopago = new MercadoPago();
+        
+        // Para cartão, precisamos do token (gerado no frontend)
+        if (in_array($paymentMethod, ['credit_card', 'debit_card']) && empty($data['card_token'])) {
+            throw new Exception('Token do cartão não fornecido');
+        }
+        
+        // Criar preferência de pagamento
+        $preference = $mercadopago->createPreference([
+            'amount' => $amount,
+            'description' => "Assinatura {$plan['name']} - SplitStore",
+            'plan_name' => "Plano {$plan['name']}",
+            'plan_id' => $planId,
+            'customer_name' => $user['nome'],
+            'customer_email' => $user['email'],
+            'customer_cpf' => $customerCpf,
+            'store_slug' => $storeSlug,
+            'store_name' => $storeName,
+            'user_id' => $user['id'],
+            'pending_store_id' => $pendingStoreId
+        ]);
+        
+        if (!$preference['success']) {
+            throw new Exception('Erro ao criar checkout MercadoPago: ' . ($preference['error'] ?? 'Erro desconhecido'));
+        }
+        
+        $preferenceId = $preference['data']['id'] ?? null;
+        $initPoint = $preference['data']['init_point'] ?? null;
+        
+        $stmt = $pdo->prepare("UPDATE pending_stores SET payment_id = ? WHERE id = ?");
+        $stmt->execute([$preferenceId, $pendingStoreId]);
+        
+        $response = [
+            'success' => true,
+            'payment_method' => $paymentMethod,
+            'preference_id' => $preferenceId,
+            'init_point' => $initPoint,
+            'pending_store_id' => $pendingStoreId,
+            'amount' => number_format($amount, 2, ',', '.'),
+            'plan_name' => "Plano {$plan['name']}",
+            'store_name' => $storeName,
+            'store_slug' => $storeSlug,
+            'public_key' => $mercadopago->getPublicKey()
+        ];
+        
+    } else {
+        throw new Exception('Método de pagamento inválido');
     }
-    
-    // Extrair dados do pagamento usando o método helper
-    $pixData = $misticpay->extractPixData($payment);
-    
-    if (!$pixData || !$pixData['transaction_id']) {
-        error_log("❌ Dados do PIX não encontrados na resposta");
-        http_response_code(500);
-        die(json_encode([
-            'success' => false,
-            'error' => 'Dados de pagamento incompletos',
-            'response_structure' => array_keys($payment['data'] ?? [])
-        ]));
-    }
-    
-    error_log("Transaction ID: " . $pixData['transaction_id']);
-    error_log("PIX Code: " . ($pixData['qr_code'] ? 'PRESENTE' : 'NULL'));
-    error_log("QR Code Base64: " . ($pixData['qr_code_base64'] ? 'PRESENTE' : 'NULL'));
-    
-    // Atualizar pending_store com transaction_id
-    $stmt = $pdo->prepare("UPDATE pending_stores SET payment_id = ? WHERE id = ?");
-    $stmt->execute([$pixData['transaction_id'], $pendingStoreId]);
-    
-    // RETORNO PADRONIZADO
-    $response = [
-        'success' => true,
-        'payment_id' => $pixData['transaction_id'],
-        'pending_store_id' => $pendingStoreId,
-        'pix_code' => $pixData['qr_code'],
-        'qr_code_base64' => $pixData['qr_code_base64'],
-        'amount' => number_format($amount, 2, ',', '.'),
-        'plan_name' => "Plano {$plan['name']}",
-        'store_name' => $storeName,
-        'store_slug' => $storeSlug,
-        'expires_in' => 600, // 10 minutos
-        'message' => 'Checkout criado com sucesso!'
-    ];
     
     error_log("=== CHECKOUT SUCCESS ===");
     error_log("Response: " . json_encode($response));
@@ -235,31 +262,22 @@ try {
 } catch (PDOException $e) {
     error_log("=== CHECKOUT DATABASE ERROR ===");
     error_log("Error: " . $e->getMessage());
-    error_log("File: " . $e->getFile());
-    error_log("Line: " . $e->getLine());
     
     http_response_code(500);
     echo json_encode([
         'success' => false,
         'error' => 'Erro de banco de dados',
-        'message' => 'Erro ao processar checkout',
         'details' => $e->getMessage()
     ]);
     
 } catch (Exception $e) {
     error_log("=== CHECKOUT ERROR ===");
     error_log("Error: " . $e->getMessage());
-    error_log("File: " . $e->getFile());
-    error_log("Line: " . $e->getLine());
-    error_log("Stack: " . $e->getTraceAsString());
     
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'error' => 'Erro ao processar checkout',
-        'message' => $e->getMessage(),
-        'file' => $e->getFile(),
-        'line' => $e->getLine()
+        'error' => $e->getMessage()
     ]);
 }
 ?>
