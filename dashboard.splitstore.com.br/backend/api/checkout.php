@@ -162,19 +162,26 @@ try {
     
     // Atualizar pending_store com payment_id
     $paymentId = $payment['data']['id'] ?? null;
-    $checkoutUrl = $payment['data']['checkout_url'] ?? null;
+    $pixCode = $payment['data']['pix_code'] ?? null;
+    $qrCodeBase64 = $payment['data']['qr_code_base64'] ?? null;
     
     $stmt = $pdo->prepare("UPDATE pending_stores SET payment_id = ? WHERE id = ?");
     $stmt->execute([$paymentId, $pendingStoreId]);
     
     error_log("Pagamento criado - ID: $paymentId");
-    error_log("Checkout URL: $checkoutUrl");
+    error_log("PIX Code gerado: " . ($pixCode ? 'SIM' : 'NÃO'));
     
+    // RETORNAR DADOS DO PIX PARA O FRONTEND
     echo json_encode([
         'success' => true,
-        'payment_url' => $checkoutUrl,
         'payment_id' => $paymentId,
         'pending_store_id' => $pendingStoreId,
+        'pix_code' => $pixCode,
+        'qr_code_base64' => $qrCodeBase64,
+        'amount' => number_format($amount, 2, ',', '.'),
+        'plan_name' => "Plano {$plan['name']}",
+        'store_name' => $storeName,
+        'store_slug' => $storeSlug,
         'message' => 'Checkout criado com sucesso!'
     ]);
     
