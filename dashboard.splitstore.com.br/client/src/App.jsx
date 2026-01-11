@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, Check, Zap, Shield, TrendingUp, X, AlertCircle, Loader, Copy, Clock, CheckCircle, XCircle, CreditCard, Barcode } from 'lucide-react';
+import { ChevronRight, Check, Zap, Shield, TrendingUp, X, AlertCircle, Loader, Copy, Clock, CheckCircle, XCircle, CreditCard, FileText } from 'lucide-react';
 
 // ============= COMPONENTE: PlanCard =============
 const PlanCard = ({ plan, isPopular, isSelected, onSelect }) => {
@@ -383,7 +383,7 @@ const PaymentMethodSelector = ({ amount, storeData, onSelect, onBack }) => {
       id: 'boleto',
       name: 'Boleto Bancário',
       description: 'Vencimento em 3 dias',
-      icon: <Barcode className="w-8 h-8" />,
+      icon: <FileText className="w-8 h-8" />,
       badge: 'Tradicional',
       badgeColor: 'bg-orange-600',
       features: ['Pague em qualquer banco', 'Sem necessidade de cartão', 'Aprovação em até 2 dias úteis'],
