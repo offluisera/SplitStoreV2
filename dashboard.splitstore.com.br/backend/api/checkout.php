@@ -20,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 try {
     error_log("=== CHECKOUT REQUEST INICIADO ===");
+    error_log("Timestamp: " . date('Y-m-d H:i:s'));
     
     $data = json_decode(file_get_contents('php://input'), true);
     
@@ -110,7 +111,7 @@ try {
         }
     }
     
-    error_log("Plano: {$plan['name']} - Valor: R$ $amount");
+    error_log("Plano: {$plan['name']} - Valor final: R$ $amount");
     
     // Criar registro de pending_store
     $stmt = $pdo->prepare("
@@ -140,14 +141,20 @@ try {
         'plan_id' => $planId,
         'customer_name' => $user['nome'],
         'customer_email' => $user['email'],
+        'customer_document' => null,
         'store_slug' => $storeSlug,
         'store_name' => $storeName,
         'user_id' => $user['id'],
         'pending_store_id' => $pendingStoreId
     ]);
     
+    error_log("=== RESPOSTA MISTICPAY ===");
+    error_log("Success: " . ($payment['success'] ? 'SIM' : 'NÃO'));
+    error_log("HTTP Code: " . $payment['http_code']);
+    error_log("Data: " . json_encode($payment['data']));
+    
     if (!$payment['success']) {
-        error_log("Erro ao criar pagamento na MisticPay: " . json_encode($payment));
+        error_log("❌ Erro ao criar pagamento na MisticPay");
         
         // Marcar pending_store como failed
         $stmt = $pdo->prepare("UPDATE pending_stores SET status = 'failed' WHERE id = ?");
@@ -156,20 +163,35 @@ try {
         http_response_code(500);
         die(json_encode([
             'error' => 'Erro ao criar pagamento',
-            'details' => $payment['data'] ?? null
+            'details' => $payment['data'] ?? null,
+            'http_code' => $payment['http_code']
         ]));
     }
     
+    // Extrair dados do pagamento
+    $paymentData = $payment['data'];
+    $paymentId = $paymentData['id'] ?? $paymentData['transaction_id'] ?? null;
+    
+    // Diferentes estruturas possíveis da API
+    $pixCode = $paymentData['pix_code'] ?? 
+               $paymentData['pix']['code'] ?? 
+               $paymentData['payment']['pix_code'] ?? 
+               null;
+               
+    $qrCodeBase64 = $paymentData['qr_code_base64'] ?? 
+                    $paymentData['pix']['qr_code'] ?? 
+                    $paymentData['payment']['qr_code'] ?? 
+                    null;
+    
+    error_log("Payment ID: " . ($paymentId ?? 'NULL'));
+    error_log("PIX Code: " . ($pixCode ? 'PRESENTE' : 'NULL'));
+    error_log("QR Code: " . ($qrCodeBase64 ? 'PRESENTE' : 'NULL'));
+    
     // Atualizar pending_store com payment_id
-    $paymentId = $payment['data']['id'] ?? null;
-    $pixCode = $payment['data']['pix_code'] ?? null;
-    $qrCodeBase64 = $payment['data']['qr_code_base64'] ?? null;
-    
-    $stmt = $pdo->prepare("UPDATE pending_stores SET payment_id = ? WHERE id = ?");
-    $stmt->execute([$paymentId, $pendingStoreId]);
-    
-    error_log("Pagamento criado - ID: $paymentId");
-    error_log("PIX Code gerado: " . ($pixCode ? 'SIM' : 'NÃO'));
+    if ($paymentId) {
+        $stmt = $pdo->prepare("UPDATE pending_stores SET payment_id = ? WHERE id = ?");
+        $stmt->execute([$paymentId, $pendingStoreId]);
+    }
     
     // RETORNAR DADOS DO PIX PARA O FRONTEND
     echo json_encode([
@@ -182,6 +204,7 @@ try {
         'plan_name' => "Plano {$plan['name']}",
         'store_name' => $storeName,
         'store_slug' => $storeSlug,
+        'raw_response' => $paymentData, // Para debug
         'message' => 'Checkout criado com sucesso!'
     ]);
     
@@ -195,6 +218,8 @@ try {
     http_response_code(500);
     echo json_encode([
         'error' => 'Erro ao processar checkout',
-        'message' => $e->getMessage()
+        'message' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine()
     ]);
 }

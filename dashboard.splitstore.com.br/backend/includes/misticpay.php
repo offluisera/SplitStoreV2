@@ -4,27 +4,22 @@
 class MisticPay {
     private $clientId = 'ci_6wqrtigx1d8e430';
     private $clientSecret = 'cs_w810l4jlhnqs60rrmxh8xgd2u';
-    private $apiUrl = 'https://api.misticpay.com/v1';
+    private $apiUrl = 'https://api.misticpay.com/api'; // URL CORRIGIDA
     
     /**
      * Criar um novo pagamento
      */
     public function createPayment($data) {
+        // Payload segundo documentação MisticPay
         $payload = [
-            'amount' => $data['amount'],
+            'amount' => number_format($data['amount'], 2, '.', ''), // Garantir formato decimal
             'currency' => 'BRL',
+            'payment_method' => 'pix', // Método de pagamento
             'description' => $data['description'] ?? 'Assinatura SplitStore',
             'customer' => [
                 'name' => $data['customer_name'],
                 'email' => $data['customer_email'],
                 'document' => $data['customer_document'] ?? null
-            ],
-            'items' => [
-                [
-                    'name' => $data['plan_name'],
-                    'quantity' => 1,
-                    'unit_price' => $data['amount']
-                ]
             ],
             'metadata' => [
                 'plan_id' => $data['plan_id'],
@@ -33,17 +28,19 @@ class MisticPay {
                 'user_id' => $data['user_id'],
                 'pending_store_id' => $data['pending_store_id']
             ],
-            'payment_method_types' => ['pix'],
-            'success_url' => 'https://dashboard.splitstore.com.br?status=success',
-            'cancel_url' => 'https://dashboard.splitstore.com.br?status=cancel',
-            'webhook_url' => 'https://splitstore.com.br/webhooks/misticpay.php'
+            'callback_url' => 'https://dashboard.splitstore.com.br/webhooks/misticpay',
+            'return_url' => 'https://dashboard.splitstore.com.br?status=success'
         ];
         
-        error_log("MisticPay CreatePayment Request: " . json_encode($payload));
+        error_log("=== MisticPay CreatePayment Request ===");
+        error_log("URL: {$this->apiUrl}/payments");
+        error_log("Payload: " . json_encode($payload, JSON_PRETTY_PRINT));
         
         $result = $this->makeRequest('POST', '/payments', $payload);
         
-        error_log("MisticPay CreatePayment Response: " . json_encode($result));
+        error_log("=== MisticPay CreatePayment Response ===");
+        error_log("HTTP Code: " . ($result['http_code'] ?? 'N/A'));
+        error_log("Response: " . json_encode($result, JSON_PRETTY_PRINT));
         
         return $result;
     }
@@ -52,6 +49,9 @@ class MisticPay {
      * Buscar informações de um pagamento
      */
     public function getPayment($paymentId) {
+        error_log("=== MisticPay GetPayment ===");
+        error_log("Payment ID: $paymentId");
+        
         return $this->makeRequest('GET', "/payments/{$paymentId}");
     }
     
@@ -68,11 +68,19 @@ class MisticPay {
     private function makeRequest($method, $endpoint, $data = null) {
         $url = $this->apiUrl . $endpoint;
         
+        // Autenticação Basic Auth
+        $auth = base64_encode($this->clientId . ':' . $this->clientSecret);
+        
         $headers = [
             'Content-Type: application/json',
             'Accept: application/json',
-            'Authorization: Basic ' . base64_encode($this->clientId . ':' . $this->clientSecret)
+            'Authorization: Basic ' . $auth
         ];
+        
+        error_log("=== MisticPay Request ===");
+        error_log("Method: $method");
+        error_log("URL: $url");
+        error_log("Headers: " . json_encode($headers));
         
         $ch = curl_init($url);
         
@@ -81,9 +89,12 @@ class MisticPay {
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_VERBOSE, true); // Ativar modo verbose para debug
         
         if ($data && in_array($method, ['POST', 'PUT', 'PATCH'])) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+            $jsonData = json_encode($data);
+            error_log("Request Body: $jsonData");
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
         }
         
         $response = curl_exec($ch);
@@ -92,16 +103,32 @@ class MisticPay {
         
         curl_close($ch);
         
+        error_log("=== MisticPay Response ===");
+        error_log("HTTP Code: $httpCode");
+        error_log("Response Body: $response");
+        
         if ($error) {
-            error_log("MisticPay CURL Error: " . $error);
+            error_log("CURL Error: $error");
             return [
                 'success' => false,
                 'error' => $error,
-                'http_code' => 0
+                'http_code' => 0,
+                'data' => null
             ];
         }
         
         $result = json_decode($response, true);
+        
+        // Verificar se a resposta é válida
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log("JSON Decode Error: " . json_last_error_msg());
+            return [
+                'success' => false,
+                'error' => 'Invalid JSON response: ' . json_last_error_msg(),
+                'http_code' => $httpCode,
+                'data' => $response
+            ];
+        }
         
         return [
             'success' => $httpCode >= 200 && $httpCode < 300,
