@@ -190,4 +190,8 @@ class MisticPay {
         return $pixData;
     }
 }
+<<<<<<< HEAD
 ?>
+=======
+?>
+>>>>>>> 8d63a133d287600a3d42050d11bf66aee6812121
