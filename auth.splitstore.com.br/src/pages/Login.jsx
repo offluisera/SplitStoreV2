@@ -1,3 +1,4 @@
+// auth.splitstore.com.br/src/pages/Login.jsx
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -13,7 +14,6 @@ export default function Login() {
   const [message, setMessage] = useState(null);
 
   useEffect(() => {
-    // Inicializar particles.js
     if (window.particlesJS) {
       window.particlesJS("particles-js", {
         particles: {
@@ -71,43 +71,52 @@ export default function Login() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setErrors({});
-    setMessage(null);
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setErrors({});
+  setMessage(null);
 
-    try {
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
+  try {
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData)
+    });
 
-      const data = await response.json();
-      
-      if (response.ok && data.success) {
-        setMessage({ type: 'success', text: data.message });
-        
-        localStorage.setItem('auth_token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        
-        setTimeout(() => {
-          window.location.href = 'https://dashboard.splitstore.com.br';
-        }, 1500);
-      } else {
-        if (data.errors) {
-          setErrors(data.errors);
-        } else if (data.error) {
-          setMessage({ type: 'error', text: data.error });
-        }
+    const data = await response.json();
+    
+    if (response.ok && data.success) {
+  setMessage({ type: 'success', text: data.message });
+  
+  console.log('✅ LOGIN BEM-SUCEDIDO!');
+  console.log('🔑 Token:', data.token);
+  
+  // Salvar no localStorage como backup
+  localStorage.setItem('auth_token', data.token);
+  localStorage.setItem('user', JSON.stringify(data.user));
+  
+  // USAR HASH (#) EM VEZ DE QUERY PARAM (?)
+  const redirectUrl = `https://dashboard.splitstore.com.br#token=${data.token}`;
+  console.log('🔄 URL de redirecionamento (COM HASH):', redirectUrl);
+  
+  setTimeout(() => {
+    console.log('🚀 REDIRECIONANDO...');
+    window.location.href = redirectUrl;
+  }, 1500);
+} else {
+      if (data.errors) {
+        setErrors(data.errors);
+      } else if (data.error) {
+        setMessage({ type: 'error', text: data.error });
       }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Erro ao fazer login. Tente novamente.' });
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch (error) {
+    setMessage({ type: 'error', text: 'Erro ao fazer login. Tente novamente.' });
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4 relative overflow-hidden">
@@ -115,7 +124,6 @@ export default function Login() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(220,38,38,0.1)_0%,_transparent_70%)] z-0"></div>
 
       <div className="relative z-10 w-full max-w-md">
-        {/* Logo */}
         <div className="text-center mb-8">
           <a href="https://splitstore.com.br" className="inline-flex items-center gap-3 mb-2">
             <div className="w-12 h-12 bg-gradient-to-br from-red-600 to-red-900 rounded-xl flex items-center justify-center font-black shadow-lg shadow-red-900/40">
@@ -128,10 +136,8 @@ export default function Login() {
           <p className="text-zinc-500 text-sm mt-2">Entre na sua conta</p>
         </div>
 
-        {/* Card */}
         <div className="bg-gradient-to-br from-white/[0.03] to-white/[0.01] backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
           
-          {/* Message */}
           {message && (
             <div className={`flex items-center gap-3 p-4 rounded-xl mb-6 ${
               message.type === 'success' 
@@ -150,7 +156,6 @@ export default function Login() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
                 Email
@@ -180,7 +185,6 @@ export default function Login() {
               )}
             </div>
 
-            {/* Senha */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
                 Senha
@@ -226,7 +230,6 @@ export default function Login() {
               )}
             </div>
 
-            {/* Opções */}
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer group">
                 <input
@@ -240,12 +243,8 @@ export default function Login() {
                   Lembrar-me
                 </span>
               </label>
-              <Link to="/forgot-password" className="text-sm text-red-600 hover:text-red-500 font-semibold transition-colors">
-                Esqueceu a senha?
-              </Link>
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
@@ -267,7 +266,6 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Divider */}
           <div className="relative my-8">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-white/10"></div>
@@ -279,7 +277,6 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Registro */}
           <div className="text-center">
             <p className="text-zinc-500 text-sm mb-4">
               Ainda não tem uma conta?
@@ -293,7 +290,6 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="text-center mt-8">
           <p className="text-zinc-700 text-xs">
             © 2026 SplitStore • Todos os direitos reservados

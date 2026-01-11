@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronRight, Check, Zap, Shield, TrendingUp, X } from 'lucide-react';
+// dashboard.splitstore.com.br/client/src/App.jsx
+import { useState } from 'react';
+import { ChevronRight, Check, Zap, Shield, TrendingUp, X, AlertCircle, Loader, CreditCard, Smartphone, FileText } from 'lucide-react';
 
+// ============= COMPONENTE: PlanCard =============
 const PlanCard = ({ plan, isPopular, isSelected, onSelect }) => {
   return (
     <div 
@@ -83,6 +85,7 @@ const PlanCard = ({ plan, isPopular, isSelected, onSelect }) => {
   );
 };
 
+// ============= COMPONENTE: StoreSetupForm =============
 const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
   const [formData, setFormData] = useState({
     storeName: '',
@@ -91,6 +94,8 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
   });
   const [couponApplied, setCouponApplied] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [slugError, setSlugError] = useState('');
+  const [couponError, setCouponError] = useState('');
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -99,7 +104,6 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
       [name]: value
     }));
 
-    // Auto-generate slug from store name
     if (name === 'storeName') {
       const slug = value
         .toLowerCase()
@@ -108,6 +112,7 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '');
       setFormData(prev => ({ ...prev, storeSlug: slug }));
+      setSlugError('');
     }
   };
 
@@ -115,31 +120,57 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
     if (!formData.couponCode) return;
     
     setLoading(true);
-    // Simular validação de cupom
-    setTimeout(() => {
-      setCouponApplied({
-        code: formData.couponCode,
-        discount: 10,
-        type: 'percentage'
+    setCouponError('');
+    
+    try {
+      const response = await fetch('/api/checkout/validate-coupon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: formData.couponCode })
       });
+
+      const data = await response.json();
+      
+      if (response.ok && data.valid) {
+        setCouponApplied({
+          code: data.code,
+          discount: data.discount_value,
+          type: data.discount_type
+        });
+      } else {
+        setCouponError(data.error || 'Cupom inválido');
+      }
+    } catch (error) {
+      setCouponError('Erro ao validar cupom');
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   const calculateTotal = () => {
-    let total = selectedPlan.price;
+    let total = parseFloat(selectedPlan.price_numeric);
+    
     if (couponApplied) {
-      if (couponApplied.type === 'percentage') {
-        total = total * (1 - couponApplied.discount / 100);
-      } else {
-        total = total - couponApplied.discount;
-      }
+      total = total * (1 - couponApplied.discount / 100);
     }
-    return total.toFixed(2);
+    
+    return total.toFixed(2).replace('.', ',');
+  };
+
+  const handleSubmit = () => {
+    if (!formData.storeName || !formData.storeSlug || slugError) {
+      return;
+    }
+
+    onNext({
+      ...formData,
+      coupon: couponApplied,
+      total: calculateTotal()
+    });
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto animate-fade-in">
       <button
         onClick={onBack}
         className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-8"
@@ -152,11 +183,10 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
         <div className="text-center mb-8">
           <h2 className="text-3xl font-black mb-2">Configure sua loja</h2>
           <p className="text-zinc-400">
-            Preencha os dados para criar sua conta no plano {selectedPlan.name}
+            Preencha os dados para criar sua loja no plano {selectedPlan.name}
           </p>
         </div>
 
-        {/* Plan Summary */}
         <div className="bg-red-600/10 border border-red-600/20 rounded-xl p-6 mb-8">
           <div className="flex items-center justify-between">
             <div>
@@ -172,7 +202,6 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
           </div>
         </div>
 
-        {/* Store Info Form */}
         <div className="space-y-6 mb-8">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
@@ -199,15 +228,20 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
                 name="storeSlug"
                 value={formData.storeSlug}
                 onChange={handleChange}
-                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 focus:outline-none focus:border-red-600/50 transition-colors"
+                className={`flex-1 bg-white/5 border ${slugError ? 'border-red-500' : 'border-white/10'} rounded-xl px-4 py-3.5 focus:outline-none focus:border-red-600/50 transition-colors`}
                 placeholder="minha-loja"
                 required
               />
-              <span className="text-zinc-500 text-sm">.splitstore.com.br</span>
+              <span className="text-zinc-500 text-sm whitespace-nowrap">.splitstore.com.br</span>
             </div>
+            {slugError && (
+              <div className="mt-2 flex items-center gap-2 text-red-500 text-sm">
+                <AlertCircle className="w-4 h-4" />
+                {slugError}
+              </div>
+            )}
           </div>
 
-          {/* Coupon Code */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
               Cupom de Desconto
@@ -226,9 +260,9 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
                 <button
                   onClick={handleApplyCoupon}
                   disabled={loading || !formData.couponCode}
-                  className="px-6 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 rounded-xl font-bold transition-all"
+                  className="px-6 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 rounded-xl font-bold transition-all flex items-center gap-2"
                 >
-                  {loading ? 'Validando...' : 'Aplicar'}
+                  {loading ? <Loader className="w-4 h-4 animate-spin" /> : 'Aplicar'}
                 </button>
               ) : (
                 <button
@@ -245,13 +279,18 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
             {couponApplied && (
               <div className="mt-2 flex items-center gap-2 text-green-500 text-sm">
                 <Check className="w-4 h-4" />
-                Cupom "{couponApplied.code}" aplicado! {couponApplied.discount}% de desconto
+                Cupom aplicado! {couponApplied.discount}% de desconto
+              </div>
+            )}
+            {couponError && (
+              <div className="mt-2 flex items-center gap-2 text-red-500 text-sm">
+                <AlertCircle className="w-4 h-4" />
+                {couponError}
               </div>
             )}
           </div>
         </div>
 
-        {/* Total */}
         <div className="bg-gradient-to-r from-red-600/20 to-red-900/20 border border-red-600/30 rounded-xl p-6 mb-8">
           <div className="flex items-center justify-between mb-4">
             <span className="text-zinc-400">Subtotal</span>
@@ -261,7 +300,7 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
             <div className="flex items-center justify-between mb-4 text-green-500">
               <span>Desconto ({couponApplied.discount}%)</span>
               <span className="font-semibold">
-                - R$ {(selectedPlan.price * couponApplied.discount / 100).toFixed(2)}
+                - R$ {(parseFloat(selectedPlan.price_numeric) * couponApplied.discount / 100).toFixed(2).replace('.', ',')}
               </span>
             </div>
           )}
@@ -273,10 +312,9 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
           </div>
         </div>
 
-        {/* Action Buttons */}
         <button
-          onClick={() => onNext(formData)}
-          disabled={!formData.storeName || !formData.storeSlug}
+          onClick={handleSubmit}
+          disabled={!formData.storeName || !formData.storeSlug || !!slugError}
           className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-xl font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2"
         >
           Prosseguir para Pagamento
@@ -287,10 +325,225 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
   );
 };
 
+// ============= COMPONENTE: PaymentMethodSelector =============
+const PaymentMethodSelector = ({ selectedMethod, onSelect, onNext, onBack, selectedPlan, storeData }) => {
+  const paymentMethods = [
+    {
+      id: 'pix',
+      name: 'PIX',
+      icon: <Smartphone className="w-8 h-8" />,
+      description: 'Aprovação instantânea',
+      available: true,
+      recommended: true
+    },
+    {
+      id: 'credit_card',
+      name: 'Cartão de Crédito',
+      icon: <CreditCard className="w-8 h-8" />,
+      description: 'Em breve via Pagar.me',
+      available: false
+    },
+    {
+      id: 'boleto',
+      name: 'Boleto',
+      icon: <FileText className="w-8 h-8" />,
+      description: 'Em breve via Pagar.me',
+      available: false
+    }
+  ];
+
+  return (
+    <div className="max-w-2xl mx-auto animate-fade-in">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-8"
+      >
+        <ChevronRight className="w-4 h-4 rotate-180" />
+        Voltar
+      </button>
+
+      <div className="bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/10 rounded-3xl p-8">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-black mb-2">Forma de Pagamento</h2>
+          <p className="text-zinc-400">
+            Escolha como deseja pagar seu plano {selectedPlan.name}
+          </p>
+        </div>
+
+        <div className="bg-red-600/10 border border-red-600/20 rounded-xl p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-zinc-400 mb-1">Loja</p>
+              <p className="font-black">{storeData.storeName}</p>
+              <p className="text-sm text-zinc-500">{storeData.storeSlug}.splitstore.com.br</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-zinc-400 mb-1">Total</p>
+              <p className="text-2xl font-black text-red-600">R$ {storeData.total}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4 mb-8">
+          {paymentMethods.map((method) => (
+            <div
+              key={method.id}
+              onClick={() => method.available && onSelect(method.id)}
+              className={`relative rounded-2xl p-6 transition-all cursor-pointer border-2 ${
+                method.available
+                  ? selectedMethod === method.id
+                    ? 'bg-red-600/20 border-red-600'
+                    : 'bg-white/5 border-white/10 hover:border-white/30'
+                  : 'bg-white/[0.02] border-white/5 cursor-not-allowed opacity-50'
+              }`}
+            >
+              {method.recommended && (
+                <div className="absolute -top-3 left-6">
+                  <div className="bg-green-600 text-white text-xs font-black uppercase px-4 py-1 rounded-full">
+                    Recomendado
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-4">
+                <div className={`flex-shrink-0 w-16 h-16 rounded-xl flex items-center justify-center ${
+                  selectedMethod === method.id
+                    ? 'bg-red-600/30 text-red-600'
+                    : 'bg-white/5 text-zinc-400'
+                }`}>
+                  {method.icon}
+                </div>
+                
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-xl font-black">{method.name}</h3>
+                    {!method.available && (
+                      <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded-full">
+                        Em breve
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-zinc-400">{method.description}</p>
+                </div>
+
+                {method.available && selectedMethod === method.id && (
+                  <Check className="w-6 h-6 text-red-600" />
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={() => selectedMethod && onNext(selectedMethod)}
+          disabled={!selectedMethod}
+          className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-xl font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+        >
+          Finalizar Pedido
+          <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ============= COMPONENTE: PaymentGateway =============
+const PaymentGateway = ({ selectedPlan, storeData, paymentMethod, onBack }) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const createCheckout = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          plan_id: selectedPlan.id,
+          store_name: storeData.storeName,
+          store_slug: storeData.storeSlug,
+          coupon_code: storeData.coupon?.code || '',
+          payment_method: paymentMethod
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        if (data.payment_url) {
+          window.location.href = data.payment_url;
+        }
+      } else {
+        setError(data.error || 'Erro ao criar checkout');
+      }
+    } catch (err) {
+      setError('Erro ao processar pagamento');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useState(() => {
+    createCheckout();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="max-w-2xl mx-auto animate-fade-in">
+        <div className="bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/10 rounded-3xl p-12 text-center">
+          <div className="w-20 h-20 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Loader className="w-10 h-10 text-red-600 animate-spin" />
+          </div>
+          <h2 className="text-3xl font-black mb-4">Processando...</h2>
+          <p className="text-zinc-400">Gerando link de pagamento</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-2xl mx-auto animate-fade-in">
+        <button onClick={onBack} className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-8">
+          <ChevronRight className="w-4 h-4 rotate-180" />
+          Voltar
+        </button>
+
+        <div className="bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/10 rounded-3xl p-12 text-center">
+          <div className="w-20 h-20 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <X className="w-10 h-10 text-red-600" />
+          </div>
+          <h2 className="text-3xl font-black mb-4 text-red-600">Erro no Pagamento</h2>
+          <p className="text-zinc-400 mb-8">{error}</p>
+          <div className="flex gap-4 justify-center">
+            <button onClick={onBack} className="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold transition-all">
+              Voltar
+            </button>
+            <button onClick={createCheckout} className="px-8 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold transition-all">
+              Tentar Novamente
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+};
+
+// ============= COMPONENTE PRINCIPAL: App =============
 const App = () => {
-  const [step, setStep] = useState('plans'); // plans, setup, checkout
+  const [step, setStep] = useState('plans');
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [storeData, setStoreData] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState('pix');
 
   const plans = [
     {
@@ -298,6 +551,7 @@ const App = () => {
       name: 'STARTER',
       description: 'Perfeito para começar',
       price: '14,99',
+      price_numeric: 14.99,
       icon: <Zap className="w-6 h-6 text-red-600" />,
       features: [
         '1 Servidor Minecraft',
@@ -311,15 +565,15 @@ const App = () => {
       name: 'ENTERPRISE',
       description: 'Para redes sérias',
       price: '25,99',
+      price_numeric: 25.99,
       icon: <Shield className="w-6 h-6 text-red-600" />,
       features: [
         '5 Servidores',
         'Checkout Customizável',
         'Suporte Prioritário 24/7',
-        'Analytics Avançado',
-        'API de Integração'
+        'Analytics Avançado'
       ],
-      highlight: '🔥 Mais escolhido pelos profissionais',
+      highlight: '🔥 Mais escolhido',
       isPopular: true
     },
     {
@@ -327,6 +581,7 @@ const App = () => {
       name: 'GERENCIAL',
       description: 'Soluções enterprise',
       price: '39,99',
+      price_numeric: 39.99,
       icon: <TrendingUp className="w-6 h-6 text-red-600" />,
       features: [
         'Servidores Ilimitados',
@@ -343,10 +598,9 @@ const App = () => {
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,_rgba(220,38,38,0.1)_0%,_transparent_70%)] z-0"></div>
 
       <div className="relative z-10 max-w-7xl mx-auto py-12">
-        {/* Header */}
         <div className="text-center mb-16">
           <div className="inline-flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 bg-gradient-to-br from-red-600 to-red-900 rounded-xl flex items-center justify-center font-black shadow-lg shadow-red-900/40">
+            <div className="w-12 h-12 bg-gradient-to-br from-red-600 to-red-900 rounded-xl flex items-center justify-center font-black">
               S
             </div>
             <span className="text-2xl font-black tracking-tighter uppercase">
@@ -366,7 +620,6 @@ const App = () => {
           )}
         </div>
 
-        {/* Content */}
         {step === 'plans' && (
           <div className="grid md:grid-cols-3 gap-8">
             {plans.map((plan) => (
@@ -390,32 +643,34 @@ const App = () => {
             onBack={() => setStep('plans')}
             onNext={(data) => {
               setStoreData(data);
+              setStep('payment_method');
+            }}
+          />
+        )}
+
+        {step === 'payment_method' && (
+          <PaymentMethodSelector
+            selectedMethod={paymentMethod}
+            onSelect={setPaymentMethod}
+            selectedPlan={selectedPlan}
+            storeData={storeData}
+            onBack={() => setStep('setup')}
+            onNext={(method) => {
+              setPaymentMethod(method);
               setStep('checkout');
             }}
           />
         )}
 
         {step === 'checkout' && (
-          <div className="max-w-2xl mx-auto text-center">
-            <div className="bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/10 rounded-3xl p-12">
-              <div className="w-20 h-20 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Check className="w-10 h-10 text-red-600" />
-              </div>
-              <h2 className="text-3xl font-black mb-4">Checkout em Desenvolvimento</h2>
-              <p className="text-zinc-400 mb-8">
-                Integração com MisticPay será implementada aqui
-              </p>
-              <div className="bg-black/50 rounded-xl p-6 text-left">
-                <p className="text-xs text-zinc-500 mb-2">Dados salvos:</p>
-                <pre className="text-xs text-zinc-400 overflow-auto">
-                  {JSON.stringify({ selectedPlan, storeData }, null, 2)}
-                </pre>
-              </div>
-            </div>
-          </div>
+          <PaymentGateway
+            selectedPlan={selectedPlan}
+            storeData={storeData}
+            paymentMethod={paymentMethod}
+            onBack={() => setStep('payment_method')}
+          />
         )}
 
-        {/* Footer */}
         <div className="text-center mt-16">
           <p className="text-zinc-700 text-xs">
             © 2026 SplitStore • Todos os direitos reservados

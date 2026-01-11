@@ -32,19 +32,19 @@ const Home = () => {
     const fetchData = async () => {
       try {
         // Buscar estatísticas
-        const statsResponse = await axios.get('/api/stats.php');
+        const statsResponse = await axios.get('https://api.splitstore.com.br/stats.php');
         if (statsResponse.data) {
           setStats(statsResponse.data);
         }
 
         // Buscar feedbacks
-        const feedbacksResponse = await axios.get('/api/feedbacks.php');
+        const feedbacksResponse = await axios.get('https://api.splitstore.com.br/feedbacks.php');
         if (feedbacksResponse.data && feedbacksResponse.data.length > 0) {
           setFeedbacks(feedbacksResponse.data);
         }
 
         // Buscar servidores parceiros
-        const servidoresResponse = await axios.get('/api/servidores.php');
+        const servidoresResponse = await axios.get('https://api.splitstore.com.br/servidores.php');
         if (servidoresResponse.data && servidoresResponse.data.length > 0) {
           setServidores(servidoresResponse.data);
         }
@@ -73,48 +73,48 @@ const Home = () => {
     setTimeout(() => {
       if (window.particlesJS) {
         window.particlesJS("particles-js", {
-        particles: {
-          number: { value: 80, density: { enable: true, value_area: 800 } },
-          color: { value: "#ef4444" },
-          shape: { type: "circle" },
-          opacity: {
-            value: 0.15,
-            random: true,
-            anim: { enable: true, speed: 1, opacity_min: 0.05, sync: false }
+          particles: {
+            number: { value: 80, density: { enable: true, value_area: 800 } },
+            color: { value: "#ef4444" },
+            shape: { type: "circle" },
+            opacity: {
+              value: 0.15,
+              random: true,
+              anim: { enable: true, speed: 1, opacity_min: 0.05, sync: false }
+            },
+            size: {
+              value: 3,
+              random: true,
+              anim: { enable: true, speed: 2, size_min: 0.5, sync: false }
+            },
+            line_linked: {
+              enable: true,
+              distance: 150,
+              color: "#ef4444",
+              opacity: 0.08,
+              width: 1
+            },
+            move: {
+              enable: true,
+              speed: 1,
+              direction: "none",
+              random: true,
+              out_mode: "out"
+            }
           },
-          size: {
-            value: 3,
-            random: true,
-            anim: { enable: true, speed: 2, size_min: 0.5, sync: false }
+          interactivity: {
+            detect_on: "canvas",
+            events: {
+              onhover: { enable: true, mode: "grab" },
+              resize: true
+            },
+            modes: {
+              grab: { distance: 140, line_linked: { opacity: 0.3 } }
+            }
           },
-          line_linked: {
-            enable: true,
-            distance: 150,
-            color: "#ef4444",
-            opacity: 0.08,
-            width: 1
-          },
-          move: {
-            enable: true,
-            speed: 1,
-            direction: "none",
-            random: true,
-            out_mode: "out"
-          }
-        },
-        interactivity: {
-          detect_on: "canvas",
-          events: {
-            onhover: { enable: true, mode: "grab" },
-            resize: true
-          },
-          modes: {
-            grab: { distance: 140, line_linked: { opacity: 0.3 } }
-          }
-        },
-        retina_detect: true
-      });
-    }
+          retina_detect: true
+        });
+      }
     }, 100);
 
     // Scroll handler
@@ -403,7 +403,7 @@ const Home = () => {
                       <Zap className="w-5 h-5 text-red-600" />
                       <div>
                         <div className="text-xs font-black text-white">Entrega Instantânea</div>
-                        <div className="text-[10px] text-zinc-600">Em {'<'} 3 segundos</div>
+                        <div className="text-[10px] text-zinc-600">Em &lt; 3 segundos</div>
                       </div>
                     </div>
                   </div>
@@ -491,28 +491,28 @@ const Home = () => {
                 const colorClass = colorClasses[feedback.color] || colorClasses.red;
                 
                 return (
-                <div key={i} className="group" data-aos="fade-up" data-aos-delay={i * 100}>
-                  <div className="bg-gradient-to-br from-white/[0.02] to-white/[0.01] backdrop-blur-[20px] border border-white/5 hover:border-red-600/20 p-8 rounded-3xl h-full flex flex-col transition-all duration-400 hover:-translate-y-2">
-                    <div className="flex gap-1 mb-6">
-                      {[...Array(5)].map((_, j) => (
-                        <Star key={j} className="w-4 h-4 fill-red-600 text-red-600" />
-                      ))}
-                    </div>
-                    <blockquote className="text-zinc-400 leading-relaxed mb-8 flex-1 italic">
-                      "{feedback.texto}"
-                    </blockquote>
-                    <div className="flex items-center gap-4 pt-6 border-t border-white/5">
-                      <div className={`w-12 h-12 bg-gradient-to-br ${colorClass.split(' ')[0]} ${colorClass.split(' ')[1]} rounded-full flex items-center justify-center font-black text-white border-2 ${colorClass.split(' ')[2]}`}>
-                        {feedback.avatar}
+                  <div key={i} className="group" data-aos="fade-up" data-aos-delay={i * 100}>
+                    <div className="bg-gradient-to-br from-white/[0.02] to-white/[0.01] backdrop-blur-[20px] border border-white/5 hover:border-red-600/20 p-8 rounded-3xl h-full flex flex-col transition-all duration-400 hover:-translate-y-2">
+                      <div className="flex gap-1 mb-6">
+                        {[...Array(5)].map((_, j) => (
+                          <Star key={j} className="w-4 h-4 fill-red-600 text-red-600" />
+                        ))}
                       </div>
-                      <div>
-                        <h4 className="font-black uppercase text-sm tracking-tight">{feedback.nome}</h4>
-                        <p className="text-xs text-zinc-600 font-bold uppercase tracking-wider">{feedback.cargo}</p>
+                      <blockquote className="text-zinc-400 leading-relaxed mb-8 flex-1 italic">
+                        "{feedback.texto}"
+                      </blockquote>
+                      <div className="flex items-center gap-4 pt-6 border-t border-white/5">
+                        <div className={`w-12 h-12 bg-gradient-to-br ${colorClass.split(' ')[0]} ${colorClass.split(' ')[1]} rounded-full flex items-center justify-center font-black text-white border-2 ${colorClass.split(' ')[2]}`}>
+                          {feedback.avatar}
+                        </div>
+                        <div>
+                          <h4 className="font-black uppercase text-sm tracking-tight">{feedback.nome}</h4>
+                          <p className="text-xs text-zinc-600 font-bold uppercase tracking-wider">{feedback.cargo}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
+                );
               })}
             </div>
           </div>
@@ -599,17 +599,17 @@ const Home = () => {
                 const colorClass = colorClasses[servidor.color] || colorClasses.red;
                 
                 return (
-                <div key={i} className="group" data-aos="zoom-in" data-aos-delay={i * 50}>
-                  <div className="bg-gradient-to-br from-white/[0.02] to-white/[0.01] backdrop-blur-[20px] border border-white/5 hover:border-red-600/30 aspect-square rounded-2xl p-6 flex flex-col items-center justify-center grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all duration-500 hover:-translate-y-2">
-                    <div className={`w-20 h-20 bg-gradient-to-br ${colorClass} rounded-2xl flex items-center justify-center font-black text-white text-2xl mb-4`}>
-                      {servidor.sigla}
+                  <div key={i} className="group" data-aos="zoom-in" data-aos-delay={i * 50}>
+                    <div className="bg-gradient-to-br from-white/[0.02] to-white/[0.01] backdrop-blur-[20px] border border-white/5 hover:border-red-600/30 aspect-square rounded-2xl p-6 flex flex-col items-center justify-center grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all duration-500 hover:-translate-y-2">
+                      <div className={`w-20 h-20 bg-gradient-to-br ${colorClass} rounded-2xl flex items-center justify-center font-black text-white text-2xl mb-4`}>
+                        {servidor.sigla}
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 group-hover:text-red-600 transition-colors text-center">
+                        {servidor.nome}
+                      </span>
                     </div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 group-hover:text-red-600 transition-colors text-center">
-                      {servidor.nome}
-                    </span>
                   </div>
-                </div>
-              );
+                );
               })}
             </div>
 

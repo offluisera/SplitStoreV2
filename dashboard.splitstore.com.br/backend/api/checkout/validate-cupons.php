@@ -1,9 +1,9 @@
 <?php
-// backend/api/checkout/validate-coupon.php
+// dashboard.splitstore.com.br/backend/api/checkout/validate-coupon.php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -21,6 +21,8 @@ try {
     $data = json_decode(file_get_contents('php://input'), true);
     $code = strtoupper(trim($data['code'] ?? ''));
     
+    error_log("Validando cupom: $code");
+    
     if (empty($code)) {
         http_response_code(400);
         die(json_encode(['error' => 'Código do cupom não fornecido']));
@@ -37,12 +39,15 @@ try {
     $coupon = $stmt->fetch();
     
     if (!$coupon) {
+        error_log("Cupom não encontrado ou inválido: $code");
         http_response_code(400);
         die(json_encode([
             'valid' => false,
             'error' => 'Cupom inválido ou expirado'
         ]));
     }
+    
+    error_log("Cupom válido: $code - Desconto: {$coupon['discount_percent']}%");
     
     echo json_encode([
         'valid' => true,
@@ -52,7 +57,7 @@ try {
     ]);
     
 } catch (Exception $e) {
-    error_log("Validate Coupon Error: " . $e->getMessage());
+    error_log("Erro ao validar cupom: " . $e->getMessage());
     http_response_code(500);
     echo json_encode(['error' => 'Erro ao validar cupom']);
 }

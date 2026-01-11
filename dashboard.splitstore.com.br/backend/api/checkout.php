@@ -1,5 +1,5 @@
 <?php
-// backend/api/checkout.php
+// dashboard.splitstore.com.br/backend/api/checkout.php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -19,6 +19,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 try {
+    error_log("=== CHECKOUT REQUEST INICIADO ===");
+    
     $data = json_decode(file_get_contents('php://input'), true);
     
     // Validar token do usuário
@@ -41,9 +43,12 @@ try {
     $user = $stmt->fetch();
     
     if (!$user) {
+        error_log("Token inválido ou expirado");
         http_response_code(401);
         die(json_encode(['error' => 'Sessão inválida']));
     }
+    
+    error_log("Usuário autenticado: {$user['nome']} (ID: {$user['id']})");
     
     // Validar dados
     $planId = $data['plan_id'] ?? '';
@@ -97,17 +102,21 @@ try {
             $discount = $amount * ($coupon['discount_percent'] / 100);
             $amount -= $discount;
             
+            error_log("Cupom aplicado: $couponCode - Desconto: R$ $discount");
+            
             // Incrementar uso do cupom
             $stmt = $pdo->prepare("UPDATE coupons SET used_count = used_count + 1 WHERE code = ?");
             $stmt->execute([$couponCode]);
         }
     }
     
+    error_log("Plano: {$plan['name']} - Valor: R$ $amount");
+    
     // Criar registro de pending_store
     $stmt = $pdo->prepare("
         INSERT INTO pending_stores 
-        (user_id, store_name, slug, plan_id, amount, discount, coupon_code, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+        (user_id, store_name, slug, plan_id, amount, discount, coupon_code, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
     ");
     $stmt->execute([
         $user['id'],
@@ -120,11 +129,14 @@ try {
     ]);
     $pendingStoreId = $pdo->lastInsertId();
     
+    error_log("Pending Store criada - ID: $pendingStoreId");
+    
     // Criar pagamento na MisticPay
     $misticpay = new MisticPay();
     $payment = $misticpay->createPayment([
         'amount' => $amount,
-        'plan_name' => "Plano {$plan['name']} - SplitStore",
+        'description' => "Assinatura {$plan['name']} - SplitStore",
+        'plan_name' => "Plano {$plan['name']}",
         'plan_id' => $planId,
         'customer_name' => $user['nome'],
         'customer_email' => $user['email'],
@@ -135,7 +147,9 @@ try {
     ]);
     
     if (!$payment['success']) {
-        // Reverter pending_store
+        error_log("Erro ao criar pagamento na MisticPay: " . json_encode($payment));
+        
+        // Marcar pending_store como failed
         $stmt = $pdo->prepare("UPDATE pending_stores SET status = 'failed' WHERE id = ?");
         $stmt->execute([$pendingStoreId]);
         
@@ -147,18 +161,30 @@ try {
     }
     
     // Atualizar pending_store com payment_id
+    $paymentId = $payment['data']['id'] ?? null;
+    $checkoutUrl = $payment['data']['checkout_url'] ?? null;
+    
     $stmt = $pdo->prepare("UPDATE pending_stores SET payment_id = ? WHERE id = ?");
-    $stmt->execute([$payment['data']['id'] ?? null, $pendingStoreId]);
+    $stmt->execute([$paymentId, $pendingStoreId]);
+    
+    error_log("Pagamento criado - ID: $paymentId");
+    error_log("Checkout URL: $checkoutUrl");
     
     echo json_encode([
         'success' => true,
-        'payment_url' => $payment['data']['checkout_url'] ?? null,
-        'payment_id' => $payment['data']['id'] ?? null,
-        'pending_store_id' => $pendingStoreId
+        'payment_url' => $checkoutUrl,
+        'payment_id' => $paymentId,
+        'pending_store_id' => $pendingStoreId,
+        'message' => 'Checkout criado com sucesso!'
     ]);
     
 } catch (Exception $e) {
-    error_log("Checkout Error: " . $e->getMessage());
+    error_log("=== CHECKOUT ERROR ===");
+    error_log("Erro: " . $e->getMessage());
+    error_log("File: " . $e->getFile());
+    error_log("Line: " . $e->getLine());
+    error_log("Stack: " . $e->getTraceAsString());
+    
     http_response_code(500);
     echo json_encode([
         'error' => 'Erro ao processar checkout',

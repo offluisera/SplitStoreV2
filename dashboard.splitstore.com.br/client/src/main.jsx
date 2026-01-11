@@ -1,10 +1,10 @@
-// src/main.jsx
+// dashboard.splitstore.com.br/client/src/main.jsx
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
 
-// Inicializar Particles.js quando disponível
+// Inicializar Particles.js
 const initParticles = () => {
   if (window.particlesJS) {
     window.particlesJS("particles-js", {
@@ -52,43 +52,20 @@ const initParticles = () => {
   }
 };
 
-// Verificar autenticação via URL ou localStorage
-const checkAuth = () => {
-  // 1. Verificar se veio token na URL (redirecionamento do auth)
-  const urlParams = new URLSearchParams(window.location.search);
-  const urlToken = urlParams.get('token');
-  const urlUser = urlParams.get('user');
-  
-  if (urlToken && urlUser) {
-    // Salvar token e user do URL
-    localStorage.setItem('auth_token', urlToken);
-    localStorage.setItem('user', urlUser);
-    
-    // Limpar URL sem recarregar a página
-    window.history.replaceState({}, document.title, window.location.pathname);
-    return true;
-  }
-  
-  // 2. Verificar se já tem token no localStorage
-  const storedToken = localStorage.getItem('auth_token');
-  const storedUser = localStorage.getItem('user');
-  
-  if (storedToken && storedUser) {
-    return true;
-  }
-  
-  // 3. Se não tem token, redirecionar para auth
-  window.location.href = 'https://auth.splitstore.com.br/login';
-  return false;
-};
+console.log('⚛️ React Main.jsx executando...');
+console.log('💾 Token atual:', localStorage.getItem('auth_token') ? 'EXISTE ✅' : 'NÃO EXISTE ❌');
 
-if (checkAuth()) {
-  ReactDOM.createRoot(document.getElementById('root')).render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>,
-  )
-  
-  // Inicializar particles após render
-  setTimeout(initParticles, 100);
-}
+// Renderizar App sempre (a verificação já foi feita no index.html)
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
+
+console.log('✅ App renderizado!');
+
+// Inicializar particles
+setTimeout(() => {
+  initParticles();
+  console.log('🎨 Particles inicializados!');
+}, 100);

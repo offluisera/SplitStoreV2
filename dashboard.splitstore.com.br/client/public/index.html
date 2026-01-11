@@ -9,8 +9,60 @@
     <!-- Particles.js -->
     <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
     
-    <!-- Tailwind CSS (opcional se você quiser usar) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- DEBUG SCRIPT - EXECUTADO ANTES DE TUDO -->
+    <script>
+      console.log('🚀 === DASHBOARD CARREGANDO ===');
+      console.log('⏰ Timestamp:', new Date().toISOString());
+      console.log('📍 URL:', window.location.href);
+      
+      // Capturar token da URL IMEDIATAMENTE
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlToken = urlParams.get('token');
+      
+      console.log('🔍 Procurando token na URL...');
+      console.log('🔑 Token encontrado:', urlToken ? 'SIM ✅' : 'NÃO ❌');
+      
+      if (urlToken) {
+        console.log('🔑 Token (20 primeiros):', urlToken.substring(0, 20) + '...');
+        console.log('🔑 Token (tamanho):', urlToken.length);
+        
+        console.log('💾 Salvando no localStorage...');
+        try {
+          localStorage.setItem('auth_token', urlToken);
+          console.log('✅ Token salvo com sucesso!');
+          
+          // Verificar se realmente salvou
+          const saved = localStorage.getItem('auth_token');
+          console.log('✅ Verificação:', saved ? 'SALVO ✅' : 'ERRO ❌');
+          
+          // Limpar URL
+          console.log('🧹 Limpando URL...');
+          const cleanUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+          console.log('✅ URL limpa:', window.location.href);
+          
+        } catch (error) {
+          console.error('❌ ERRO ao salvar token:', error);
+        }
+      } else {
+        console.log('🔍 Token não encontrado na URL, verificando localStorage...');
+        const stored = localStorage.getItem('auth_token');
+        console.log('💾 Token no localStorage:', stored ? 'SIM ✅' : 'NÃO ❌');
+        
+        if (!stored) {
+          console.log('❌ SEM TOKEN - Redirecionando para login em 2s...');
+          setTimeout(() => {
+            console.log('🔄 REDIRECIONANDO...');
+            window.location.href = 'https://auth.splitstore.com.br/login';
+          }, 2000);
+        }
+      }
+      
+      console.log('='.repeat(50));
+    </script>
     
     <style>
       #particles-js {

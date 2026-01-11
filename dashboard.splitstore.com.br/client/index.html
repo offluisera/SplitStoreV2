@@ -1,12 +1,135 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>client</title>
+    <title>Dashboard - SplitStore</title>
+    
+    <!-- Particles.js -->
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- CAPTURA TOKEN DO HASH - EXECUTADO ANTES DE TUDO -->
+    <script>
+      console.log('🚀 === DASHBOARD INICIANDO ===');
+      console.log('⏰ Timestamp:', new Date().toISOString());
+      console.log('📍 URL completa:', window.location.href);
+      console.log('📍 Hash:', window.location.hash);
+      console.log('📍 Search:', window.location.search);
+      
+      // Função para pegar parâmetros do hash
+      function getHashParams() {
+        const hash = window.location.hash.substring(1); // Remove o #
+        const params = {};
+        
+        if (hash) {
+          hash.split('&').forEach(param => {
+            const [key, value] = param.split('=');
+            if (key && value) {
+              params[key] = decodeURIComponent(value);
+            }
+          });
+        }
+        
+        return params;
+      }
+      
+      // Capturar token do HASH (#token=...)
+      const hashParams = getHashParams();
+      const hashToken = hashParams.token;
+      
+      console.log('🔍 Procurando token no HASH...');
+      console.log('🔑 Token no hash:', hashToken ? 'SIM ✅' : 'NÃO ❌');
+      
+      if (hashToken) {
+        console.log('🔑 Token encontrado no HASH!');
+        console.log('🔑 Token (20 primeiros):', hashToken.substring(0, 20) + '...');
+        console.log('🔑 Token (tamanho):', hashToken.length);
+        
+        console.log('💾 Salvando no localStorage...');
+        try {
+          localStorage.setItem('auth_token', hashToken);
+          console.log('✅ Token salvo com sucesso!');
+          
+          // Verificar
+          const saved = localStorage.getItem('auth_token');
+          console.log('✅ Verificação:', saved ? 'SALVO ✅' : 'ERRO ❌');
+          
+          // Limpar hash
+          console.log('🧹 Limpando hash da URL...');
+          window.history.replaceState({}, document.title, window.location.pathname);
+          console.log('✅ Hash limpo!');
+          
+        } catch (error) {
+          console.error('❌ ERRO ao salvar token:', error);
+        }
+      }
+      
+      // Também tentar pegar do query param (fallback)
+      const urlParams = new URLSearchParams(window.location.search);
+      const queryToken = urlParams.get('token');
+      
+      console.log('🔍 Procurando token no QUERY PARAM...');
+      console.log('🔑 Token no query:', queryToken ? 'SIM ✅' : 'NÃO ❌');
+      
+      if (queryToken && !hashToken) {
+        console.log('🔑 Token encontrado no QUERY!');
+        console.log('🔑 Token (20 primeiros):', queryToken.substring(0, 20) + '...');
+        
+        console.log('💾 Salvando no localStorage...');
+        try {
+          localStorage.setItem('auth_token', queryToken);
+          console.log('✅ Token salvo com sucesso!');
+          
+          // Limpar URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+          console.log('✅ URL limpa!');
+          
+        } catch (error) {
+          console.error('❌ ERRO ao salvar token:', error);
+        }
+      }
+      
+      // Verificar se tem token salvo
+      const storedToken = localStorage.getItem('auth_token');
+      console.log('💾 Token no localStorage:', storedToken ? 'SIM ✅' : 'NÃO ❌');
+      
+      if (!storedToken && !hashToken && !queryToken) {
+        console.log('❌ SEM TOKEN EM LUGAR NENHUM!');
+        console.log('❌ Redirecionando para login em 2s...');
+        
+        setTimeout(() => {
+          console.log('🔄 REDIRECIONANDO PARA AUTH...');
+          window.location.href = 'https://auth.splitstore.com.br/login';
+        }, 2000);
+      } else {
+        console.log('✅ TOKEN DISPONÍVEL - App será carregado!');
+      }
+      
+      console.log('='.repeat(50));
+    </script>
+    
+    <style>
+      #particles-js {
+        position: fixed;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        z-index: 0;
+      }
+      
+      #root {
+        position: relative;
+        z-index: 1;
+      }
+    </style>
   </head>
   <body>
+    <div id="particles-js"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

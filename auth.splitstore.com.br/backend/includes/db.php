@@ -21,9 +21,19 @@ try {
     die(json_encode(['error' => 'Erro de conexão com banco de dados']));
 }
 
+// Redis com autenticação
+$redis = null;
 try {
-    $redis = new Redis();
-    $redis->connect('127.0.0.1', 6379);
+    if (class_exists('Redis')) {
+        $redis = new Redis();
+        $redis->connect('127.0.0.1', 6379);
+        $redis->auth('def0b8c10b5bd0ba');
+        
+        // Testar conexão
+        if (!$redis->ping()) {
+            throw new Exception('Redis ping failed');
+        }
+    }
 } catch(Exception $e) {
     error_log("Redis Error: " . $e->getMessage());
     $redis = null;
