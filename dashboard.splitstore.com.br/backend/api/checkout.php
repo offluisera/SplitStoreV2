@@ -1,5 +1,11 @@
 <?php
-// dashboard.splitstore.com.br/backend/api/checkout.php
+/**
+ * ============================================
+ * CHECKOUT API - CORRIGIDO PARA MISTICPAY
+ * ============================================
+ * dashboard.splitstore.com.br/backend/api/checkout.php
+ */
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -61,11 +67,20 @@ try {
     $planId = $data['plan_id'] ?? '';
     $storeName = trim($data['store_name'] ?? '');
     $storeSlug = trim($data['store_slug'] ?? '');
+    $customerCpf = preg_replace('/[^0-9]/', '', $data['customer_cpf'] ?? '');
     $couponCode = trim($data['coupon_code'] ?? '');
     
-    if (empty($planId) || empty($storeName) || empty($storeSlug)) {
+    if (empty($planId) || empty($storeName) || empty($storeSlug) || empty($customerCpf)) {
+        error_log("Dados incompletos - Plan: $planId, Store: $storeName, Slug: $storeSlug, CPF: $customerCpf");
         http_response_code(400);
         die(json_encode(['success' => false, 'error' => 'Dados incompletos']));
+    }
+    
+    // Validar CPF (11 dígitos)
+    if (strlen($customerCpf) !== 11) {
+        error_log("CPF inválido: $customerCpf");
+        http_response_code(400);
+        die(json_encode(['success' => false, 'error' => 'CPF inválido']));
     }
     
     // Verificar se slug já existe
@@ -147,7 +162,7 @@ try {
         'plan_id' => $planId,
         'customer_name' => $user['nome'],
         'customer_email' => $user['email'],
-        'customer_cpf' => '', // Opcional
+        'customer_cpf' => $customerCpf, // CPF do formulário
         'store_slug' => $storeSlug,
         'store_name' => $storeName,
         'user_id' => $user['id'],
@@ -176,61 +191,34 @@ try {
         ]));
     }
     
-    // Extrair dados do pagamento
-    $paymentData = $payment['data'];
+    // Extrair dados do pagamento usando o método helper
+    $pixData = $misticpay->extractPixData($payment);
     
-    // Tentar diferentes estruturas da resposta da MisticPay
-    $paymentId = $paymentData['id'] ?? $paymentData['payment_id'] ?? null;
-    
-    // PIX Code pode vir em vários formatos
-    $pixCode = $paymentData['pix']['qr_code'] ?? 
-               $paymentData['pix']['code'] ?? 
-               $paymentData['pix_code'] ?? 
-               $paymentData['qr_code'] ?? 
-               $paymentData['code'] ?? null;
-    
-    // QR Code Base64
-    $qrCodeBase64 = $paymentData['pix']['qr_code_image'] ?? 
-                    $paymentData['pix']['image'] ?? 
-                    $paymentData['qr_code_image'] ?? 
-                    $paymentData['qr_code_base64'] ?? null;
-    
-    error_log("Payment ID: " . ($paymentId ?? 'NULL'));
-    error_log("PIX Code: " . ($pixCode ? 'PRESENTE (' . strlen($pixCode) . ' chars)' : 'NULL'));
-    error_log("QR Code: " . ($qrCodeBase64 ? 'PRESENTE' : 'NULL'));
-    
-    // Validar dados essenciais
-    if (!$paymentId) {
-        error_log("❌ Payment ID não encontrado na resposta!");
+    if (!$pixData || !$pixData['transaction_id']) {
+        error_log("❌ Dados do PIX não encontrados na resposta");
         http_response_code(500);
         die(json_encode([
             'success' => false,
-            'error' => 'Payment ID não retornado pela API',
-            'response_structure' => array_keys($paymentData)
+            'error' => 'Dados de pagamento incompletos',
+            'response_structure' => array_keys($payment['data'] ?? [])
         ]));
     }
     
-    if (!$pixCode) {
-        error_log("❌ PIX Code não encontrado na resposta!");
-        http_response_code(500);
-        die(json_encode([
-            'success' => false,
-            'error' => 'Código PIX não retornado pela API',
-            'response_structure' => array_keys($paymentData)
-        ]));
-    }
+    error_log("Transaction ID: " . $pixData['transaction_id']);
+    error_log("PIX Code: " . ($pixData['qr_code'] ? 'PRESENTE' : 'NULL'));
+    error_log("QR Code Base64: " . ($pixData['qr_code_base64'] ? 'PRESENTE' : 'NULL'));
     
-    // Atualizar pending_store com payment_id
+    // Atualizar pending_store com transaction_id
     $stmt = $pdo->prepare("UPDATE pending_stores SET payment_id = ? WHERE id = ?");
-    $stmt->execute([$paymentId, $pendingStoreId]);
+    $stmt->execute([$pixData['transaction_id'], $pendingStoreId]);
     
     // RETORNO PADRONIZADO
     $response = [
         'success' => true,
-        'payment_id' => $paymentId,
+        'payment_id' => $pixData['transaction_id'],
         'pending_store_id' => $pendingStoreId,
-        'pix_code' => $pixCode,
-        'qr_code_base64' => $qrCodeBase64,
+        'pix_code' => $pixData['qr_code'],
+        'qr_code_base64' => $pixData['qr_code_base64'],
         'amount' => number_format($amount, 2, ',', '.'),
         'plan_name' => "Plano {$plan['name']}",
         'store_name' => $storeName,
@@ -274,3 +262,4 @@ try {
         'line' => $e->getLine()
     ]);
 }
+?>

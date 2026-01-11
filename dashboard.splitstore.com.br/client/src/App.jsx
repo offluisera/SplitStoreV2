@@ -1,6 +1,6 @@
 // dashboard.splitstore.com.br/client/src/App.jsx
 import { useState } from 'react';
-import { ChevronRight, Check, Zap, Shield, TrendingUp, X, AlertCircle, Loader, CreditCard, Smartphone, FileText } from 'lucide-react';
+import { ChevronRight, Check, Zap, Shield, TrendingUp, X, AlertCircle, Loader, Copy, Clock, CheckCircle, XCircle } from 'lucide-react';
 
 // ============= COMPONENTE: PlanCard =============
 const PlanCard = ({ plan, isPopular, isSelected, onSelect }) => {
@@ -90,6 +90,7 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
   const [formData, setFormData] = useState({
     storeName: '',
     storeSlug: '',
+    customerCpf: '',
     couponCode: ''
   });
   const [couponApplied, setCouponApplied] = useState(null);
@@ -99,6 +100,26 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    // Formatar CPF automaticamente
+    if (name === 'customerCpf') {
+      const cpfValue = value.replace(/\D/g, ''); // Remove tudo que não é número
+      let formatted = cpfValue;
+      
+      if (cpfValue.length <= 11) {
+        formatted = cpfValue
+          .replace(/(\d{3})(\d)/, '$1.$2')
+          .replace(/(\d{3})(\d)/, '$1.$2')
+          .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+      }
+      
+      setFormData(prev => ({
+        ...prev,
+        [name]: formatted
+      }));
+      return;
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -125,7 +146,9 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
     try {
       const response = await fetch('/api/checkout/validate-coupon', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ code: formData.couponCode })
       });
 
@@ -141,6 +164,7 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
         setCouponError(data.error || 'Cupom inválido');
       }
     } catch (error) {
+      console.error('Erro ao validar cupom:', error);
       setCouponError('Erro ao validar cupom');
     } finally {
       setLoading(false);
@@ -158,15 +182,35 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
   };
 
   const handleSubmit = () => {
-    if (!formData.storeName || !formData.storeSlug || slugError) {
+    console.log('=== SUBMIT FORM ===');
+    console.log('Store Name:', formData.storeName);
+    console.log('Store Slug:', formData.storeSlug);
+    console.log('Customer CPF:', formData.customerCpf);
+    console.log('Slug Error:', slugError);
+    
+    if (!formData.storeName || !formData.storeSlug || !formData.customerCpf || slugError) {
+      alert('Por favor, preencha todos os campos obrigatórios');
       return;
     }
 
-    onNext({
-      ...formData,
+    // Validar CPF (11 dígitos)
+    const cpfClean = formData.customerCpf.replace(/\D/g, '');
+    if (cpfClean.length !== 11) {
+      alert('CPF inválido. Digite 11 números.');
+      return;
+    }
+
+    const submitData = {
+      storeName: formData.storeName,
+      storeSlug: formData.storeSlug,
+      customerCpf: cpfClean,
+      couponCode: formData.couponCode,
       coupon: couponApplied,
       total: calculateTotal()
-    });
+    };
+    
+    console.log('Dados para enviar:', submitData);
+    onNext(submitData);
   };
 
   return (
@@ -244,6 +288,25 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
+              CPF do Titular *
+            </label>
+            <input
+              type="text"
+              name="customerCpf"
+              value={formData.customerCpf}
+              onChange={handleChange}
+              maxLength="14"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 focus:outline-none focus:border-red-600/50 transition-colors"
+              placeholder="000.000.000-00"
+              required
+            />
+            <p className="mt-2 text-xs text-zinc-500">
+              CPF necessário para geração do pagamento PIX
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
               Cupom de Desconto
             </label>
             <div className="flex gap-2">
@@ -314,7 +377,7 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
 
         <button
           onClick={handleSubmit}
-          disabled={!formData.storeName || !formData.storeSlug || !!slugError}
+          disabled={!formData.storeName || !formData.storeSlug || !formData.customerCpf || !!slugError}
           className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-xl font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2"
         >
           Prosseguir para Pagamento
@@ -325,132 +388,11 @@ const StoreSetupForm = ({ selectedPlan, onBack, onNext }) => {
   );
 };
 
-// ============= COMPONENTE: PaymentMethodSelector =============
-const PaymentMethodSelector = ({ selectedMethod, onSelect, onNext, onBack, selectedPlan, storeData }) => {
-  const paymentMethods = [
-    {
-      id: 'pix',
-      name: 'PIX',
-      icon: <Smartphone className="w-8 h-8" />,
-      description: 'Aprovação instantânea',
-      available: true,
-      recommended: true
-    },
-    {
-      id: 'credit_card',
-      name: 'Cartão de Crédito',
-      icon: <CreditCard className="w-8 h-8" />,
-      description: 'Em breve via Pagar.me',
-      available: false
-    },
-    {
-      id: 'boleto',
-      name: 'Boleto',
-      icon: <FileText className="w-8 h-8" />,
-      description: 'Em breve via Pagar.me',
-      available: false
-    }
-  ];
-
-  return (
-    <div className="max-w-2xl mx-auto animate-fade-in">
-      <button
-        onClick={onBack}
-        className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-8"
-      >
-        <ChevronRight className="w-4 h-4 rotate-180" />
-        Voltar
-      </button>
-
-      <div className="bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/10 rounded-3xl p-8">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-black mb-2">Forma de Pagamento</h2>
-          <p className="text-zinc-400">
-            Escolha como deseja pagar seu plano {selectedPlan.name}
-          </p>
-        </div>
-
-        <div className="bg-red-600/10 border border-red-600/20 rounded-xl p-6 mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-zinc-400 mb-1">Loja</p>
-              <p className="font-black">{storeData.storeName}</p>
-              <p className="text-sm text-zinc-500">{storeData.storeSlug}.splitstore.com.br</p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-zinc-400 mb-1">Total</p>
-              <p className="text-2xl font-black text-red-600">R$ {storeData.total}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4 mb-8">
-          {paymentMethods.map((method) => (
-            <div
-              key={method.id}
-              onClick={() => method.available && onSelect(method.id)}
-              className={`relative rounded-2xl p-6 transition-all cursor-pointer border-2 ${
-                method.available
-                  ? selectedMethod === method.id
-                    ? 'bg-red-600/20 border-red-600'
-                    : 'bg-white/5 border-white/10 hover:border-white/30'
-                  : 'bg-white/[0.02] border-white/5 cursor-not-allowed opacity-50'
-              }`}
-            >
-              {method.recommended && (
-                <div className="absolute -top-3 left-6">
-                  <div className="bg-green-600 text-white text-xs font-black uppercase px-4 py-1 rounded-full">
-                    Recomendado
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center gap-4">
-                <div className={`flex-shrink-0 w-16 h-16 rounded-xl flex items-center justify-center ${
-                  selectedMethod === method.id
-                    ? 'bg-red-600/30 text-red-600'
-                    : 'bg-white/5 text-zinc-400'
-                }`}>
-                  {method.icon}
-                </div>
-                
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-xl font-black">{method.name}</h3>
-                    {!method.available && (
-                      <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded-full">
-                        Em breve
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-zinc-400">{method.description}</p>
-                </div>
-
-                {method.available && selectedMethod === method.id && (
-                  <Check className="w-6 h-6 text-red-600" />
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <button
-          onClick={() => selectedMethod && onNext(selectedMethod)}
-          disabled={!selectedMethod}
-          className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-xl font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2"
-        >
-          Finalizar Pedido
-          <ChevronRight className="w-5 h-5" />
-        </button>
-      </div>
-    </div>
-  );
-};
-
 // ============= COMPONENTE: PaymentGateway =============
-const PaymentGateway = ({ selectedPlan, storeData, paymentMethod, onBack }) => {
+const PaymentGateway = ({ selectedPlan, storeData, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [pixData, setPixData] = useState(null);
 
   const createCheckout = async () => {
     setLoading(true);
@@ -459,33 +401,47 @@ const PaymentGateway = ({ selectedPlan, storeData, paymentMethod, onBack }) => {
     try {
       const token = localStorage.getItem('auth_token');
       
+      console.log('=== CRIANDO CHECKOUT ===');
+      console.log('Token:', token ? 'EXISTE' : 'NÃO EXISTE');
+      console.log('Plan ID:', selectedPlan.id);
+      console.log('Store Name:', storeData.storeName);
+      console.log('Store Slug:', storeData.storeSlug);
+      console.log('Coupon Code:', storeData.couponCode || 'NENHUM');
+
+      const requestBody = {
+        plan_id: selectedPlan.id,
+        store_name: storeData.storeName,
+        store_slug: storeData.storeSlug,
+        customer_cpf: storeData.customerCpf,
+        coupon_code: storeData.couponCode || ''
+      };
+
+      console.log('Request Body:', JSON.stringify(requestBody, null, 2));
+
       const response = await fetch('/api/checkout', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          plan_id: selectedPlan.id,
-          store_name: storeData.storeName,
-          store_slug: storeData.storeSlug,
-          coupon_code: storeData.coupon?.code || '',
-          payment_method: paymentMethod
-        })
+        body: JSON.stringify(requestBody)
       });
 
+      console.log('Response Status:', response.status);
+
       const data = await response.json();
+      console.log('Response Data:', data);
 
       if (response.ok && data.success) {
-        if (data.payment_url) {
-          window.location.href = data.payment_url;
-        }
+        setPixData(data);
+        setLoading(false);
       } else {
         setError(data.error || 'Erro ao criar checkout');
+        setLoading(false);
       }
     } catch (err) {
-      setError('Erro ao processar pagamento');
-    } finally {
+      console.error('Erro no checkout:', err);
+      setError('Erro ao processar pagamento: ' + err.message);
       setLoading(false);
     }
   };
@@ -502,7 +458,7 @@ const PaymentGateway = ({ selectedPlan, storeData, paymentMethod, onBack }) => {
             <Loader className="w-10 h-10 text-red-600 animate-spin" />
           </div>
           <h2 className="text-3xl font-black mb-4">Processando...</h2>
-          <p className="text-zinc-400">Gerando link de pagamento</p>
+          <p className="text-zinc-400">Gerando seu pagamento PIX</p>
         </div>
       </div>
     );
@@ -518,7 +474,7 @@ const PaymentGateway = ({ selectedPlan, storeData, paymentMethod, onBack }) => {
 
         <div className="bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/10 rounded-3xl p-12 text-center">
           <div className="w-20 h-20 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <X className="w-10 h-10 text-red-600" />
+            <XCircle className="w-10 h-10 text-red-600" />
           </div>
           <h2 className="text-3xl font-black mb-4 text-red-600">Erro no Pagamento</h2>
           <p className="text-zinc-400 mb-8">{error}</p>
@@ -535,7 +491,124 @@ const PaymentGateway = ({ selectedPlan, storeData, paymentMethod, onBack }) => {
     );
   }
 
+  if (pixData) {
+    return (
+      <PixPaymentScreen 
+        paymentData={pixData}
+        onBack={onBack}
+      />
+    );
+  }
+
   return null;
+};
+
+// ============= COMPONENTE: PixPaymentScreen =============
+const PixPaymentScreen = ({ paymentData, onBack }) => {
+  const [copied, setCopied] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(600);
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(paymentData.pix_code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto animate-fade-in">
+      <button onClick={onBack} className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-8">
+        <ChevronRight className="w-4 h-4 rotate-180" />
+        Voltar
+      </button>
+
+      <div className="bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/10 rounded-3xl p-8">
+        <div className="bg-orange-600/10 border border-orange-600/20 rounded-xl p-4 mb-8 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Clock className="w-5 h-5 text-orange-600" />
+            <span className="text-sm text-zinc-400">Tempo restante</span>
+          </div>
+          <span className="text-2xl font-black text-orange-600">
+            {formatTime(timeRemaining)}
+          </span>
+        </div>
+
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-black mb-2">Pague com PIX</h2>
+          <p className="text-zinc-400">
+            Escaneie o QR Code ou copie o código PIX
+          </p>
+        </div>
+
+        <div className="bg-red-600/10 border border-red-600/20 rounded-xl p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-zinc-400 mb-1">Valor</p>
+              <p className="text-2xl font-black text-red-600">
+                R$ {paymentData.amount}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-zinc-400 mb-1">Loja</p>
+              <p className="font-black">{paymentData.store_name}</p>
+            </div>
+          </div>
+        </div>
+
+        {paymentData.qr_code_base64 && (
+          <div className="bg-white rounded-2xl p-8 mb-8">
+            <div className="flex justify-center">
+              <img 
+                src={paymentData.qr_code_base64}
+                alt="QR Code PIX"
+                className="w-64 h-64"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="bg-black/50 rounded-xl p-6 mb-8">
+          <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
+            Código PIX Copia e Cola
+          </label>
+          <div className="flex gap-3">
+            <div className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 overflow-hidden">
+              <p className="text-sm font-mono truncate text-zinc-300">
+                {paymentData.pix_code}
+              </p>
+            </div>
+            <button
+              onClick={copyToClipboard}
+              className="px-6 bg-red-600 hover:bg-red-700 rounded-xl font-bold transition-all flex items-center gap-2 whitespace-nowrap"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-5 h-5" />
+                  Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-5 h-5" />
+                  Copiar
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-green-600/10 border border-green-600/20 rounded-xl p-6">
+          <p className="text-sm text-green-400 text-center">
+            ✅ Após o pagamento, sua loja será ativada automaticamente!
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // ============= COMPONENTE PRINCIPAL: App =============
@@ -543,7 +616,6 @@ const App = () => {
   const [step, setStep] = useState('plans');
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [storeData, setStoreData] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState('pix');
 
   const plans = [
     {
@@ -629,6 +701,7 @@ const App = () => {
                 isPopular={plan.isPopular}
                 isSelected={selectedPlan?.id === plan.id}
                 onSelect={(p) => {
+                  console.log('Plano selecionado:', p);
                   setSelectedPlan(p);
                   setStep('setup');
                 }}
@@ -642,32 +715,18 @@ const App = () => {
             selectedPlan={selectedPlan}
             onBack={() => setStep('plans')}
             onNext={(data) => {
+              console.log('Dados do formulário:', data);
               setStoreData(data);
-              setStep('payment_method');
-            }}
-          />
-        )}
-
-        {step === 'payment_method' && (
-          <PaymentMethodSelector
-            selectedMethod={paymentMethod}
-            onSelect={setPaymentMethod}
-            selectedPlan={selectedPlan}
-            storeData={storeData}
-            onBack={() => setStep('setup')}
-            onNext={(method) => {
-              setPaymentMethod(method);
               setStep('checkout');
             }}
           />
         )}
 
-        {step === 'checkout' && (
+        {step === 'checkout' && selectedPlan && storeData && (
           <PaymentGateway
             selectedPlan={selectedPlan}
             storeData={storeData}
-            paymentMethod={paymentMethod}
-            onBack={() => setStep('payment_method')}
+            onBack={() => setStep('setup')}
           />
         )}
 

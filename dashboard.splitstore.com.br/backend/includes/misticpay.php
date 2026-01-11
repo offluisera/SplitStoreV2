@@ -1,7 +1,7 @@
 <?php
 /**
  * ============================================
- * MISTICPAY - CLASSE CORRIGIDA
+ * MISTICPAY - CLASSE CORRIGIDA COM DOCUMENTAÇÃO OFICIAL
  * ============================================
  * dashboard.splitstore.com.br/backend/includes/misticpay.php
  */
@@ -9,41 +9,29 @@
 class MisticPay {
     private $clientId = 'ci_6wqrtigx1d8e430';
     private $clientSecret = 'cs_w810l4jlhnqs60rrmxh8xgd2u';
-    private $apiUrl = 'https://api.misticpay.com/api'; // CORRETO: /api não /v1
+    private $apiUrl = 'https://api.misticpay.com';
     
     /**
-     * Criar um novo pagamento PIX
+     * Criar uma nova transação PIX
+     * Conforme documentação: https://docs.misticpay.com/#create-transaction
      */
     public function createPayment($data) {
-        // Estrutura CORRETA segundo docs da MisticPay
+        // Estrutura CORRETA segundo a documentação MisticPay
         $payload = [
-            'amount' => number_format((float)$data['amount'], 2, '.', ''), // String com 2 decimais
-            'currency' => 'BRL',
-            'payment_method' => 'pix',
+            'amount' => floatval($data['amount']), // Valor em reais (ex: 4.55)
+            'payerName' => $data['customer_name'],
+            'payerDocument' => preg_replace('/[^0-9]/', '', $data['customer_cpf'] ?? '00000000000'),
+            'transactionId' => $data['pending_store_id'] ?? uniqid('store_'),
             'description' => $data['description'] ?? 'Assinatura SplitStore',
-            'customer' => [
-                'name' => $data['customer_name'],
-                'email' => $data['customer_email'],
-                'document' => preg_replace('/[^0-9]/', '', $data['customer_cpf'] ?? '')
-            ],
-            'metadata' => [
-                'plan_id' => $data['plan_id'] ?? '',
-                'store_slug' => $data['store_slug'] ?? '',
-                'store_name' => $data['store_name'] ?? '',
-                'user_id' => $data['user_id'] ?? '',
-                'pending_store_id' => $data['pending_store_id'] ?? ''
-            ],
-            // IMPORTANTE: Webhook deve apontar para dashboard
-            'webhook_url' => 'https://dashboard.splitstore.com.br/backend/webhooks/misticpay.php',
-            'return_url' => 'https://dashboard.splitstore.com.br?status=success',
-            'expires_in' => 600 // 10 minutos em segundos
+            'projectWebhook' => 'https://dashboard.splitstore.com.br/backend/webhooks/misticpay.php'
         ];
         
         error_log("=== MisticPay CreatePayment Request ===");
-        error_log("URL: {$this->apiUrl}/payments");
+        error_log("URL: {$this->apiUrl}/api/transactions/create");
         error_log("Payload: " . json_encode($payload, JSON_PRETTY_PRINT));
         
-        $result = $this->makeRequest('POST', '/payments', $payload);
+        // Endpoint correto: /api/transactions/create
+        $result = $this->makeRequest('POST', '/api/transactions/create', $payload);
         
         error_log("=== MisticPay CreatePayment Response ===");
         error_log("HTTP Code: " . ($result['http_code'] ?? 'N/A'));
@@ -53,20 +41,20 @@ class MisticPay {
     }
     
     /**
-     * Buscar informações de um pagamento
+     * Buscar informações de uma transação
      */
-    public function getPayment($paymentId) {
+    public function getPayment($transactionId) {
         error_log("=== MisticPay GetPayment ===");
-        error_log("Payment ID: $paymentId");
+        error_log("Transaction ID: $transactionId");
         
-        return $this->makeRequest('GET', "/payments/{$paymentId}");
+        return $this->makeRequest('POST', "/api/transactions/check", ['transactionId' => $transactionId]);
     }
     
     /**
-     * Cancelar um pagamento
+     * Cancelar uma transação
      */
-    public function cancelPayment($paymentId) {
-        return $this->makeRequest('POST', "/payments/{$paymentId}/cancel");
+    public function cancelPayment($transactionId) {
+        return $this->makeRequest('POST', "/transactions/{$transactionId}/cancel");
     }
     
     /**
@@ -75,12 +63,12 @@ class MisticPay {
     private function makeRequest($method, $endpoint, $data = null) {
         $url = $this->apiUrl . $endpoint;
         
-        // Headers CORRETOS segundo documentação
+        // Headers corretos segundo documentação MisticPay
         $headers = [
             'Content-Type: application/json',
             'Accept: application/json',
-            'Authorization: Bearer ' . $this->clientSecret, // Bearer token
-            'X-Client-Id: ' . $this->clientId
+            'ci: ' . $this->clientId,
+            'cs: ' . $this->clientSecret
         ];
         
         error_log("=== MisticPay Request ===");
@@ -96,6 +84,11 @@ class MisticPay {
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_VERBOSE, true); // Debug detalhado
+        
+        // Capturar informações detalhadas do CURL
+        $verbose = fopen('php://temp', 'w+');
+        curl_setopt($ch, CURLOPT_STDERR, $verbose);
         
         if ($data && in_array($method, ['POST', 'PUT', 'PATCH'])) {
             $jsonData = json_encode($data);
@@ -107,14 +100,20 @@ class MisticPay {
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
         
-        // Pega informações adicionais do erro
+        // Pegar informações adicionais do erro
         $curlInfo = curl_getinfo($ch);
         
+        // Ler verbose output
+        rewind($verbose);
+        $verboseLog = stream_get_contents($verbose);
+        
         curl_close($ch);
+        fclose($verbose);
         
         error_log("=== MisticPay Response ===");
         error_log("HTTP Code: $httpCode");
         error_log("Response Body: $response");
+        error_log("CURL Verbose: $verboseLog");
         
         if ($error) {
             error_log("CURL Error: $error");
@@ -123,7 +122,8 @@ class MisticPay {
                 'success' => false,
                 'error' => $error,
                 'http_code' => $httpCode,
-                'data' => null
+                'data' => null,
+                'curl_info' => $curlInfo
             ];
         }
         
@@ -157,7 +157,7 @@ class MisticPay {
      */
     public function verifyWebhookSignature($payload, $signature) {
         if (empty($signature)) {
-            return true; // Se não tiver signature, aceita (para testes)
+            return true; // Aceita sem signature para testes
         }
         
         $expectedSignature = hash_hmac('sha256', $payload, $this->clientSecret);
@@ -166,6 +166,7 @@ class MisticPay {
     
     /**
      * Extrair dados do PIX da resposta
+     * Adaptado para a estrutura real da MisticPay
      */
     public function extractPixData($response) {
         if (!isset($response['data'])) {
@@ -174,24 +175,28 @@ class MisticPay {
         
         $data = $response['data'];
         
-        // Tenta diferentes estruturas que a MisticPay pode retornar
+        error_log("=== Extracting PIX Data ===");
+        error_log("Response structure: " . json_encode(array_keys($data)));
+        
+        // A MisticPay retorna estrutura específica
         $pixData = [
-            'payment_id' => $data['id'] ?? $data['payment_id'] ?? null,
-            'qr_code' => $data['pix']['qr_code'] ?? $data['qr_code'] ?? $data['pix_code'] ?? null,
-            'qr_code_base64' => $data['pix']['qr_code_image'] ?? $data['qr_code_image'] ?? $data['qr_code_base64'] ?? null,
-            'amount' => $data['amount'] ?? null,
-            'status' => $data['status'] ?? 'pending',
-            'expires_at' => $data['expires_at'] ?? $data['expiration_date'] ?? null
+            'transaction_id' => $data['transactionId'] ?? $data['data']['transactionId'] ?? null,
+            'qr_code' => $data['copyPaste'] ?? $data['data']['copyPaste'] ?? null,
+            'qr_code_base64' => $data['qrCodeBase64'] ?? $data['data']['qrCodeBase64'] ?? null,
+            'qrcode_url' => $data['qrcodeUrl'] ?? $data['data']['qrcodeUrl'] ?? null,
+            'amount' => $data['transactionAmount'] ?? $data['data']['transactionAmount'] ?? null,
+            'status' => $data['transactionState'] ?? $data['data']['transactionState'] ?? 'PENDENTE',
+            'payer_name' => $data['payer']['name'] ?? $data['data']['payer']['name'] ?? null,
+            'payer_document' => $data['payer']['document'] ?? $data['data']['payer']['document'] ?? null
         ];
         
         error_log("=== Extracted PIX Data ===");
-        error_log(json_encode($pixData, JSON_PRETTY_PRINT));
+        error_log("Transaction ID: " . ($pixData['transaction_id'] ?? 'NULL'));
+        error_log("QR Code: " . ($pixData['qr_code'] ? 'PRESENT (' . strlen($pixData['qr_code']) . ' chars)' : 'NULL'));
+        error_log("QR Code Base64: " . ($pixData['qr_code_base64'] ? 'PRESENT' : 'NULL'));
+        error_log("Full data: " . json_encode($pixData, JSON_PRETTY_PRINT));
         
         return $pixData;
     }
 }
-<<<<<<< HEAD
 ?>
-=======
-?>
->>>>>>> 8d63a133d287600a3d42050d11bf66aee6812121
