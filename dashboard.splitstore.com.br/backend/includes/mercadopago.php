@@ -20,8 +20,8 @@ class MercadoPago {
     public function __construct() {
         // CONFIGURAÇÃO: Adicione suas credenciais do MercadoPago
         // Obtenha em: https://www.mercadopago.com.br/developers/panel/credentials
-        $this->accessToken = getenv('MERCADOPAGO_ACCESS_TOKEN') ?: 'APP_USR-5162382429216835-011115-e15aea05d70ef2c745af51327f2b56c6-1563669339';
-        $this->publicKey = getenv('MERCADOPAGO_PUBLIC_KEY') ?: 'APP_USR-9aa3a7d4-6d01-4835-a373-1978aa70a24a';
+        $this->accessToken = getenv('MERCADOPAGO_ACCESS_TOKEN') ?: 'APP_USR-533600977149191-030303-2d634e7ece6e3208818e1111357149b3-442348295';
+        $this->publicKey = getenv('MERCADOPAGO_PUBLIC_KEY') ?: 'APP_USR-e901acfd-c602-4aa0-be99-a75b73093faf';
     }
     
     /**

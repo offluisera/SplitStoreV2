@@ -72,6 +72,8 @@ try {
     $couponCode = trim($data['coupon_code'] ?? '');
     $paymentMethod = $data['payment_method'] ?? 'pix'; // pix, credit_card, debit_card, boleto
     
+    error_log("Payment Method recebido: $paymentMethod");
+    
     if (empty($planId) || empty($storeName) || empty($storeSlug) || empty($customerCpf)) {
         error_log("Dados incompletos - Plan: $planId, Store: $storeName, Slug: $storeSlug, CPF: $customerCpf");
         http_response_code(400);
@@ -164,6 +166,8 @@ try {
     $response = null;
     
     if ($paymentMethod === 'pix') {
+        error_log("Processando PIX...");
+        
         // Usar MisticPay para PIX
         $misticpay = new MisticPay();
         $payment = $misticpay->createPayment([
@@ -204,13 +208,10 @@ try {
         ];
         
     } elseif (in_array($paymentMethod, ['credit_card', 'debit_card', 'boleto'])) {
+        error_log("Processando MercadoPago - Método: $paymentMethod");
+        
         // Usar MercadoPago para Cartão/Boleto
         $mercadopago = new MercadoPago();
-        
-        // Para cartão, precisamos do token (gerado no frontend)
-        if (in_array($paymentMethod, ['credit_card', 'debit_card']) && empty($data['card_token'])) {
-            throw new Exception('Token do cartão não fornecido');
-        }
         
         // Criar preferência de pagamento
         $preference = $mercadopago->createPreference([
@@ -227,15 +228,25 @@ try {
             'pending_store_id' => $pendingStoreId
         ]);
         
+        error_log("MercadoPago Response: " . json_encode($preference));
+        
         if (!$preference['success']) {
+            error_log("❌ Erro MercadoPago: " . ($preference['error'] ?? 'Unknown'));
             throw new Exception('Erro ao criar checkout MercadoPago: ' . ($preference['error'] ?? 'Erro desconhecido'));
         }
         
         $preferenceId = $preference['data']['id'] ?? null;
         $initPoint = $preference['data']['init_point'] ?? null;
         
+        if (!$preferenceId || !$initPoint) {
+            error_log("❌ Dados incompletos do MercadoPago - Preference ID: $preferenceId, Init Point: $initPoint");
+            throw new Exception('Resposta incompleta do MercadoPago');
+        }
+        
         $stmt = $pdo->prepare("UPDATE pending_stores SET payment_id = ? WHERE id = ?");
         $stmt->execute([$preferenceId, $pendingStoreId]);
+        
+        error_log("✅ Checkout MercadoPago criado - Preference ID: $preferenceId");
         
         $response = [
             'success' => true,
@@ -251,7 +262,7 @@ try {
         ];
         
     } else {
-        throw new Exception('Método de pagamento inválido');
+        throw new Exception('Método de pagamento inválido: ' . $paymentMethod);
     }
     
     error_log("=== CHECKOUT SUCCESS ===");
