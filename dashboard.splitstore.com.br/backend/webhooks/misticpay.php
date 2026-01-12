@@ -1,291 +1,198 @@
 <?php
 /**
  * ============================================
- * WEBHOOK MISTICPAY - CORRIGIDO
+ * WEBHOOK MISTICPAY - VERSÃO ROBUSTA
  * ============================================
  * dashboard.splitstore.com.br/backend/webhooks/misticpay.php
- * 
- * IMPORTANTE: Configure esta URL no painel da MisticPay:
- * https://dashboard.splitstore.com.br/backend/webhooks/misticpay.php
  */
 
-header('Content-Type: application/json');
+// Log TUDO que chegar
+$logFile = __DIR__ . '/../logs/webhook_misticpay.log';
+$timestamp = date('Y-m-d H:i:s');
 
-// Log de todas as requisições
-error_log("=== WEBHOOK MISTICPAY RECEBIDO ===");
-error_log("Timestamp: " . date('Y-m-d H:i:s'));
-error_log("Method: " . $_SERVER['REQUEST_METHOD']);
-error_log("IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'N/A'));
-error_log("Headers: " . json_encode(getallheaders()));
+file_put_contents($logFile, "\n=== WEBHOOK RECEBIDO: $timestamp ===\n", FILE_APPEND);
+file_put_contents($logFile, "Headers: " . json_encode(getallheaders()) . "\n", FILE_APPEND);
+
+header('Content-Type: application/json');
 
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/misticpay.php';
 
 try {
     $payload = file_get_contents('php://input');
-    $signature = $_SERVER['HTTP_X_MISTICPAY_SIGNATURE'] ?? '';
     
-    error_log("Payload recebido: $payload");
-    error_log("Signature: $signature");
+    file_put_contents($logFile, "Payload RAW: $payload\n", FILE_APPEND);
     
     if (empty($payload)) {
-        error_log("❌ Payload vazio");
-        http_response_code(400);
-        die(json_encode(['error' => 'Payload vazio']));
+        file_put_contents($logFile, "❌ Payload vazio\n", FILE_APPEND);
+        
+        // Aceitar mesmo assim (MisticPay pode enviar vazio)
+        http_response_code(200);
+        echo json_encode(['status' => 'received', 'message' => 'Payload vazio, mas aceito']);
+        exit;
     }
-    
-    // Verificar assinatura (comentado para testes, descomente em produção)
-    /*
-    $misticpay = new MisticPay();
-    if ($signature && !$misticpay->verifyWebhookSignature($payload, $signature)) {
-        error_log("❌ Assinatura inválida!");
-        http_response_code(401);
-        die(json_encode(['error' => 'Assinatura inválida']));
-    }
-    */
     
     $data = json_decode($payload, true);
     
     if (json_last_error() !== JSON_ERROR_NONE) {
-        error_log("❌ JSON inválido: " . json_last_error_msg());
-        http_response_code(400);
-        die(json_encode(['error' => 'JSON inválido']));
+        file_put_contents($logFile, "❌ JSON inválido: " . json_last_error_msg() . "\n", FILE_APPEND);
+        http_response_code(200); // Aceitar mesmo assim
+        echo json_encode(['status' => 'received', 'error' => 'JSON inválido']);
+        exit;
     }
     
-    // A MisticPay pode enviar em diferentes formatos, tenta todos
-    $event = $data['event'] ?? $data['type'] ?? $data['status'] ?? 'unknown';
-    $payment = $data['data'] ?? $data['payment'] ?? $data;
-    $paymentId = $payment['id'] ?? $data['id'] ?? null;
-    $status = $payment['status'] ?? $data['status'] ?? 'unknown';
+    file_put_contents($logFile, "Data parsed: " . json_encode($data, JSON_PRETTY_PRINT) . "\n", FILE_APPEND);
     
-    error_log("Event: $event");
-    error_log("Payment ID: " . ($paymentId ?? 'N/A'));
-    error_log("Status: $status");
-    error_log("Full Payment Data: " . json_encode($payment, JSON_PRETTY_PRINT));
+    // Extrair transaction_id de várias formas possíveis
+    $transactionId = $data['transactionId'] 
+                  ?? $data['transaction_id'] 
+                  ?? $data['id'] 
+                  ?? $data['data']['transactionId']
+                  ?? $data['data']['id']
+                  ?? null;
     
-    if (!$paymentId) {
-        error_log("❌ Payment ID não encontrado no webhook");
-        http_response_code(400);
-        die(json_encode(['error' => 'Payment ID não encontrado']));
+    file_put_contents($logFile, "Transaction ID: $transactionId\n", FILE_APPEND);
+    
+    if (!$transactionId) {
+        file_put_contents($logFile, "❌ Transaction ID não encontrado\n", FILE_APPEND);
+        http_response_code(200);
+        echo json_encode(['status' => 'received', 'warning' => 'No transaction ID']);
+        exit;
     }
-    
-    // Processar baseado no status
-    switch ($status) {
-        case 'paid':
-        case 'approved':
-        case 'completed':
-        case 'payment.approved':
-        case 'payment.succeeded':
-        case 'payment.completed':
-        case 'payment.paid':
-            handlePaymentApproved($pdo, $paymentId, $payment);
-            break;
-            
-        case 'failed':
-        case 'cancelled':
-        case 'expired':
-        case 'payment.failed':
-        case 'payment.cancelled':
-        case 'payment.expired':
-            handlePaymentFailed($pdo, $paymentId, $status);
-            break;
-            
-        case 'refunded':
-        case 'payment.refunded':
-            handlePaymentRefunded($pdo, $paymentId);
-            break;
-            
-        default:
-            error_log("⚠️ Status não tratado: $status");
-    }
-    
-    echo json_encode([
-        'status' => 'received',
-        'event' => $event,
-        'payment_id' => $paymentId,
-        'processed_status' => $status,
-        'timestamp' => date('Y-m-d H:i:s')
-    ]);
-    
-} catch (Exception $e) {
-    error_log("=== WEBHOOK ERROR ===");
-    error_log("Erro: " . $e->getMessage());
-    error_log("Stack: " . $e->getTraceAsString());
-    
-    http_response_code(500);
-    echo json_encode([
-        'error' => 'Erro ao processar webhook',
-        'message' => $e->getMessage()
-    ]);
-}
-
-/**
- * Pagamento aprovado - Criar loja
- */
-function handlePaymentApproved($pdo, $paymentId, $paymentData) {
-    error_log("=== PROCESSANDO PAGAMENTO APROVADO ===");
-    error_log("Payment ID: $paymentId");
     
     // Buscar pending_store
     $stmt = $pdo->prepare("
         SELECT * FROM pending_stores 
-        WHERE payment_id = ? AND status = 'pending'
+        WHERE payment_id = ? OR id = ?
     ");
-    $stmt->execute([$paymentId]);
-    $pendingStore = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stmt->execute([$transactionId, $transactionId]);
+    $pendingStore = $stmt->fetch();
     
     if (!$pendingStore) {
-        error_log("❌ Pending store não encontrada para payment: $paymentId");
-        
-        // Tenta buscar por qualquer status (pode já ter sido processada)
-        $stmt = $pdo->prepare("SELECT status FROM pending_stores WHERE payment_id = ?");
-        $stmt->execute([$paymentId]);
-        $existing = $stmt->fetch();
-        
-        if ($existing) {
-            error_log("ℹ️ Pending store já existe com status: " . $existing['status']);
-            return; // Já foi processada
-        }
-        
-        return;
+        file_put_contents($logFile, "⚠️ Pending store não encontrada para transaction: $transactionId\n", FILE_APPEND);
+        http_response_code(200);
+        echo json_encode(['status' => 'received', 'warning' => 'Pending store not found']);
+        exit;
     }
     
-    error_log("✅ Pending Store encontrada - ID: {$pendingStore['id']}");
+    file_put_contents($logFile, "✅ Pending Store encontrada - ID: {$pendingStore['id']}\n", FILE_APPEND);
     
-    try {
-        $pdo->beginTransaction();
-        
-        // Criar a loja
-        $stmt = $pdo->prepare("
-            INSERT INTO stores (user_id, nome, slug, plano, status, created_at)
-            VALUES (?, ?, ?, ?, 'active', NOW())
-        ");
-        $stmt->execute([
-            $pendingStore['user_id'],
-            $pendingStore['store_name'],
-            $pendingStore['slug'],
-            $pendingStore['plan_id']
-        ]);
-        $storeId = $pdo->lastInsertId();
-        
-        error_log("✅ Loja criada - ID: $storeId");
-        
-        // Criar transação
-        $stmt = $pdo->prepare("
-            INSERT INTO transactions 
-            (store_id, user_id, produto_nome, amount, status, payment_method, transaction_id, created_at)
-            VALUES (?, ?, ?, ?, 'completed', 'pix', ?, NOW())
-        ");
-        $stmt->execute([
-            $storeId,
-            $pendingStore['user_id'],
-            "Plano " . ucfirst($pendingStore['plan_id']),
-            $pendingStore['amount'] - $pendingStore['discount'],
-            $paymentId
-        ]);
-        
-        error_log("✅ Transação criada");
-        
-        // Atualizar pending_store
-        $stmt = $pdo->prepare("
-            UPDATE pending_stores 
-            SET status = 'completed', updated_at = NOW()
-            WHERE id = ?
-        ");
-        $stmt->execute([$pendingStore['id']]);
-        
-        error_log("✅ Pending store atualizada");
-        
-        $pdo->commit();
-        
-        error_log("=== LOJA CRIADA COM SUCESSO ===");
-        error_log("Store ID: $storeId");
-        error_log("Store Slug: {$pendingStore['slug']}");
-        error_log("User ID: {$pendingStore['user_id']}");
-        
-        // TODO: Enviar email de confirmação
-        
-    } catch (Exception $e) {
-        $pdo->rollBack();
-        error_log("❌ Erro ao criar loja: " . $e->getMessage());
-        throw $e;
+    // Verificar se já foi processada
+    if ($pendingStore['status'] === 'completed') {
+        file_put_contents($logFile, "ℹ️ Já foi processada anteriormente\n", FILE_APPEND);
+        http_response_code(200);
+        echo json_encode(['status' => 'received', 'info' => 'Already processed']);
+        exit;
     }
-}
-
-/**
- * Pagamento falhou
- */
-function handlePaymentFailed($pdo, $paymentId, $status) {
-    error_log("=== PROCESSANDO PAGAMENTO FALHOU ===");
-    error_log("Payment ID: $paymentId");
-    error_log("Status: $status");
     
-    $stmt = $pdo->prepare("
-        UPDATE pending_stores 
-        SET status = 'failed', updated_at = NOW()
-        WHERE payment_id = ?
-    ");
-    $stmt->execute([$paymentId]);
+    // Extrair status de várias formas
+    $status = $data['transactionState'] 
+           ?? $data['status'] 
+           ?? $data['data']['transactionState']
+           ?? $data['data']['status']
+           ?? 'PENDENTE';
     
-    error_log("✅ Pending store marcada como failed");
-}
-
-/**
- * Pagamento reembolsado
- */
-function handlePaymentRefunded($pdo, $paymentId) {
-    error_log("=== PROCESSANDO REEMBOLSO ===");
-    error_log("Payment ID: $paymentId");
+    file_put_contents($logFile, "Status recebido: $status\n", FILE_APPEND);
     
-    try {
+    // Verificar se foi aprovado (vários status possíveis)
+    $approvedStatuses = ['PAGO', 'CONCLUIDO', 'APROVADO', 'COMPLETO', 'paid', 'approved', 'completed'];
+    
+    if (in_array(strtoupper($status), array_map('strtoupper', $approvedStatuses))) {
+        file_put_contents($logFile, "🎉 PAGAMENTO APROVADO!\n", FILE_APPEND);
+        
+        // Processar aprovação
         $pdo->beginTransaction();
         
-        // Buscar transação
-        $stmt = $pdo->prepare("
-            SELECT store_id FROM transactions 
-            WHERE transaction_id = ?
-        ");
-        $stmt->execute([$paymentId]);
-        $transaction = $stmt->fetch();
-        
-        if ($transaction) {
-            // Desativar loja
+        try {
+            // 1. Criar loja
             $stmt = $pdo->prepare("
-                UPDATE stores 
-                SET status = 'suspended', updated_at = NOW()
+                INSERT INTO stores (user_id, nome, slug, plano, status, created_at)
+                VALUES (?, ?, ?, ?, 'active', NOW())
+            ");
+            $stmt->execute([
+                $pendingStore['user_id'],
+                $pendingStore['store_name'],
+                $pendingStore['slug'],
+                $pendingStore['plan_id']
+            ]);
+            $storeId = $pdo->lastInsertId();
+            
+            file_put_contents($logFile, "✅ Loja criada - ID: $storeId\n", FILE_APPEND);
+            
+            // 2. Criar transação
+            $stmt = $pdo->prepare("
+                INSERT INTO transactions 
+                (store_id, user_id, produto_nome, amount, status, payment_method, transaction_id, created_at)
+                VALUES (?, ?, ?, ?, 'completed', ?, ?, NOW())
+            ");
+            $stmt->execute([
+                $storeId,
+                $pendingStore['user_id'],
+                "Plano " . ucfirst($pendingStore['plan_id']),
+                $pendingStore['amount'] - $pendingStore['discount'],
+                $pendingStore['payment_method'],
+                $transactionId
+            ]);
+            
+            file_put_contents($logFile, "✅ Transação criada\n", FILE_APPEND);
+            
+            // 3. Atualizar pending_store
+            $stmt = $pdo->prepare("
+                UPDATE pending_stores 
+                SET status = 'completed', updated_at = NOW()
                 WHERE id = ?
             ");
-            $stmt->execute([$transaction['store_id']]);
+            $stmt->execute([$pendingStore['id']]);
             
-            error_log("✅ Loja suspensa - ID: {$transaction['store_id']}");
+            file_put_contents($logFile, "✅ Pending store atualizada\n", FILE_APPEND);
             
-            // Atualizar transação
-            $stmt = $pdo->prepare("
-                UPDATE transactions 
-                SET status = 'refunded', updated_at = NOW()
-                WHERE transaction_id = ?
-            ");
-            $stmt->execute([$paymentId]);
+            // 4. Criar banco de dados da loja
+            $createDbFile = __DIR__ . '/../includes/create_store_database.php';
+            if (file_exists($createDbFile)) {
+                require_once $createDbFile;
+                
+                $dbResult = createStoreDatabase(
+                    $pendingStore['slug'],
+                    $pendingStore['store_name']
+                );
+                
+                if ($dbResult['success']) {
+                    file_put_contents($logFile, "✅ Banco criado: {$dbResult['database_name']}\n", FILE_APPEND);
+                } else {
+                    file_put_contents($logFile, "⚠️ Erro ao criar banco: {$dbResult['error']}\n", FILE_APPEND);
+                }
+            }
             
-            error_log("✅ Transação marcada como refunded");
+            $pdo->commit();
+            
+            file_put_contents($logFile, "=== PROCESSAMENTO COMPLETO! ===\n", FILE_APPEND);
+            
+            http_response_code(200);
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'Pagamento processado com sucesso',
+                'store_id' => $storeId
+            ]);
+            
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            file_put_contents($logFile, "❌ ERRO: " . $e->getMessage() . "\n", FILE_APPEND);
+            
+            http_response_code(200); // Aceitar mesmo com erro
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         }
+    } else {
+        file_put_contents($logFile, "ℹ️ Status não é aprovado: $status\n", FILE_APPEND);
         
-        // Atualizar pending_store se existir
-        $stmt = $pdo->prepare("
-            UPDATE pending_stores 
-            SET status = 'refunded', updated_at = NOW()
-            WHERE payment_id = ?
-        ");
-        $stmt->execute([$paymentId]);
-        
-        $pdo->commit();
-        
-        error_log("=== REEMBOLSO PROCESSADO ===");
-        
-    } catch (Exception $e) {
-        $pdo->rollBack();
-        error_log("❌ Erro ao processar reembolso: " . $e->getMessage());
-        throw $e;
+        http_response_code(200);
+        echo json_encode(['status' => 'received', 'payment_status' => $status]);
     }
+    
+} catch (Exception $e) {
+    file_put_contents($logFile, "❌ ERRO GERAL: " . $e->getMessage() . "\n", FILE_APPEND);
+    file_put_contents($logFile, "Stack: " . $e->getTraceAsString() . "\n", FILE_APPEND);
+    
+    http_response_code(200);
+    echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
 }
 ?>

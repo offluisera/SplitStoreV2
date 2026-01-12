@@ -633,7 +633,7 @@ const PaymentGateway = ({ selectedPlan, storeData, paymentMethod, onBack }) => {
 };
 
 // ============= COMPONENTE: PixPaymentScreen =============
-const PixPaymentScreen = ({ paymentData, onBack }) => {
+const PixPaymentScreen = ({ paymentData, onBack, onSuccess}) => {
   const [copied, setCopied] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(600);
 

@@ -1,63 +1,107 @@
 // dashboard.splitstore.com.br/client/src/components/checkout/PixPaymentScreen.jsx
 import { useState, useEffect } from 'react';
-import { ChevronRight, Copy, Check, Loader, XCircle, CheckCircle, Clock } from 'lucide-react';
+import { ChevronRight, Copy, Check, Loader, XCircle, Clock, RefreshCw } from 'lucide-react';
+import WelcomePage from '../welcome/WelcomePage';
 
-const PixPaymentScreen = ({ paymentData, onBack, onSuccess }) => {
+const PixPaymentScreen = ({ paymentData, onBack }) => {
   const [copied, setCopied] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutos
   const [checkingPayment, setCheckingPayment] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState('pending'); // pending, checking, approved, expired
+  const [paymentStatus, setPaymentStatus] = useState('pending');
+  const [storeData, setStoreData] = useState(null);
 
   useEffect(() => {
-    // Timer de expiração
-    const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          setPaymentStatus('expired');
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
+    console.log('🚀 PixPaymentScreen montado');
+    console.log('💳 Payment Data:', paymentData);
+    
+    // Verificar imediatamente ao montar
+    checkPaymentStatus();
   }, []);
 
   useEffect(() => {
-    // Verificar pagamento a cada 5 segundos
+    // Timer de expiração
+    if (paymentStatus === 'pending') {
+      const timer = setInterval(() => {
+        setTimeRemaining(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            setPaymentStatus('expired');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [paymentStatus]);
+
+  useEffect(() => {
+    // Verificar pagamento a cada 3 segundos (mais rápido)
     if (paymentStatus === 'pending') {
       const checkInterval = setInterval(() => {
+        console.log('⏰ Verificando status automaticamente...');
         checkPaymentStatus();
-      }, 5000);
+      }, 3000); // A cada 3 segundos
 
       return () => clearInterval(checkInterval);
     }
   }, [paymentStatus]);
 
   const checkPaymentStatus = async () => {
-    if (checkingPayment) return;
+    if (checkingPayment) {
+      console.log('⏳ Já está verificando...');
+      return;
+    }
     
     setCheckingPayment(true);
     
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`/api/checkout/check-payment/${paymentData.payment_id}`, {
+      
+      // Usar payment_id ou pending_store_id
+      const checkId = paymentData.payment_id || paymentData.pending_store_id;
+      
+      console.log('🔍 Verificando pagamento...');
+      console.log('📋 Check ID:', checkId);
+      console.log('🔑 Token:', token ? 'Presente' : 'Ausente');
+      
+      const response = await fetch(`/api/checkout/check-payment/${checkId}`, {
+        method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
 
+      console.log('📡 Response status:', response.status);
+
       const data = await response.json();
+      console.log('📦 Response data:', data);
       
-      if (data.status === 'approved' || data.status === 'completed') {
-        setPaymentStatus('approved');
-        setTimeout(() => {
-          onSuccess && onSuccess(data);
-        }, 2000);
+      if (response.ok && data.success) {
+        console.log('✅ Resposta OK');
+        console.log('🎯 Status:', data.status);
+        
+        if (data.status === 'approved') {
+          console.log('🎉 PAGAMENTO APROVADO!');
+          console.log('🏪 Store Data:', data.store);
+          
+          setPaymentStatus('approved');
+          setStoreData({
+            storeName: data.store?.name || paymentData.store_name,
+            slug: data.store?.slug || paymentData.store_slug,
+            planName: data.store?.plan || paymentData.plan_name,
+            amount: data.payment_data?.amount || paymentData.amount
+          });
+        } else {
+          console.log('⏳ Ainda pendente');
+        }
+      } else {
+        console.log('⚠️ Resposta não OK:', data);
       }
     } catch (error) {
-      console.error('Erro ao verificar pagamento:', error);
+      console.error('❌ Erro ao verificar pagamento:', error);
     } finally {
       setCheckingPayment(false);
     }
@@ -75,27 +119,27 @@ const PixPaymentScreen = ({ paymentData, onBack, onSuccess }) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  if (paymentStatus === 'approved') {
+  // ============================================
+  // 🎉 PAGAMENTO APROVADO - WELCOME PAGE
+  // ============================================
+  if (paymentStatus === 'approved' && storeData) {
+    console.log('🎊 Renderizando WelcomePage');
+    console.log('📊 Store Data para WelcomePage:', storeData);
+    
     return (
-      <div className="max-w-2xl mx-auto animate-fade-in">
-        <div className="bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/10 rounded-3xl p-12 text-center">
-          <div className="w-24 h-24 bg-green-600/20 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-            <CheckCircle className="w-12 h-12 text-green-600" />
-          </div>
-          <h2 className="text-4xl font-black mb-4 text-green-600">Pagamento Aprovado!</h2>
-          <p className="text-zinc-400 mb-8 text-lg">
-            Sua loja está sendo criada agora
-          </p>
-          <div className="bg-green-600/10 border border-green-600/20 rounded-xl p-6">
-            <p className="text-sm text-green-400">
-              ✨ Você será redirecionado para o dashboard em instantes...
-            </p>
-          </div>
-        </div>
-      </div>
+      <WelcomePage 
+        storeData={storeData}
+        onContinue={() => {
+          console.log('➡️ Redirecionando para dashboard...');
+          window.location.href = `/dashboard/${storeData.slug}`;
+        }}
+      />
     );
   }
 
+  // ============================================
+  // ❌ PAGAMENTO EXPIRADO
+  // ============================================
   if (paymentStatus === 'expired') {
     return (
       <div className="max-w-2xl mx-auto animate-fade-in">
@@ -120,6 +164,9 @@ const PixPaymentScreen = ({ paymentData, onBack, onSuccess }) => {
     );
   }
 
+  // ============================================
+  // ⏳ AGUARDANDO PAGAMENTO PIX
+  // ============================================
   return (
     <div className="max-w-2xl mx-auto animate-fade-in">
       <button onClick={onBack} className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-8">
@@ -168,26 +215,22 @@ const PixPaymentScreen = ({ paymentData, onBack, onSuccess }) => {
         </div>
 
         {/* QR Code */}
-        <div className="bg-white rounded-2xl p-8 mb-8">
-          <div className="flex justify-center">
-            {paymentData.qr_code_base64 ? (
+        {paymentData.qr_code_base64 && (
+          <div className="bg-white rounded-2xl p-8 mb-8">
+            <div className="flex justify-center">
               <img 
-                src={`data:image/png;base64,${paymentData.qr_code_base64}`}
+                src={paymentData.qr_code_base64}
                 alt="QR Code PIX"
                 className="w-64 h-64"
               />
-            ) : (
-              <div className="w-64 h-64 bg-zinc-100 rounded-xl flex items-center justify-center">
-                <Loader className="w-8 h-8 text-zinc-400 animate-spin" />
-              </div>
-            )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Código PIX para Copiar */}
         <div className="bg-black/50 rounded-xl p-6 mb-8">
           <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
-            Ou copie o código PIX
+            Código PIX Copia e Cola
           </label>
           <div className="flex gap-3">
             <div className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 overflow-hidden">
@@ -249,15 +292,16 @@ const PixPaymentScreen = ({ paymentData, onBack, onSuccess }) => {
               <div className="w-5 h-5 bg-green-600 rounded-full animate-pulse" />
             )}
             <span className="text-sm text-green-400">
-              {checkingPayment ? 'Verificando pagamento...' : 'Aguardando pagamento'}
+              {checkingPayment ? 'Verificando pagamento...' : 'Aguardando pagamento (atualiza a cada 3s)'}
             </span>
           </div>
           <button
             onClick={checkPaymentStatus}
             disabled={checkingPayment}
-            className="text-sm text-green-400 hover:text-green-300 transition-colors disabled:opacity-50"
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg font-bold transition-all flex items-center gap-2"
           >
-            Verificar agora
+            <RefreshCw className={`w-4 h-4 ${checkingPayment ? 'animate-spin' : ''}`} />
+            Verificar
           </button>
         </div>
       </div>
