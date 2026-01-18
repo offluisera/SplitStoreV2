@@ -1,0 +1,60 @@
+
+=== WEBHOOK RECEBIDO: 2026-01-13 03:14:41 ===
+Headers: {"Content-Length":"150","X-Forwarded-Proto":"https","Cf-Visitor":"{\"scheme\":\"https\"}","Cf-Ipcountry":"BR","Cf-Connecting-Ip":"2a13:9500:d6:100:d556:110d:ab23:1","Cdn-Loop":"cloudflare; loops=1","Accept":"*\/*","Content-Type":"application\/json","Accept-Encoding":"gzip, br","Cf-Ray":"9bcefa722ba7ef26-GRU","X-Forwarded-For":"2a13:9500:d6:100:d556:110d:ab23:1","Host":"dashboard.splitstore.com.br"}
+Payload RAW: {"transactionId":"65","transactionState":"PAGO","transactionAmount":14.99,"payer":{"name":"LUIS FERNANDO BORDIGNON DA SILVA","document":"50.729.756"}}
+Data parsed: {
+    "transactionId": "65",
+    "transactionState": "PAGO",
+    "transactionAmount": 14.99,
+    "payer": {
+        "name": "LUIS FERNANDO BORDIGNON DA SILVA",
+        "document": "50.729.756"
+    }
+}
+Transaction ID: 65
+✅ Pending Store encontrada - ID: 65
+ℹ️ Já foi processada anteriormente
+
+=== WEBHOOK RECEBIDO: 2026-01-13 03:16:09 ===
+Headers: {"Content-Length":"150","X-Forwarded-Proto":"https","Cf-Visitor":"{\"scheme\":\"https\"}","Cf-Ipcountry":"BR","Cf-Connecting-Ip":"2a13:9500:d6:100:d556:110d:ab23:1","Cdn-Loop":"cloudflare; loops=1","Accept":"*\/*","Content-Type":"application\/json","Accept-Encoding":"gzip, br","Cf-Ray":"9bcefc99daadc0df-GRU","X-Forwarded-For":"2a13:9500:d6:100:d556:110d:ab23:1","Host":"dashboard.splitstore.com.br"}
+Payload RAW: {"transactionId":"66","transactionState":"PAGO","transactionAmount":14.99,"payer":{"name":"LUIS FERNANDO BORDIGNON DA SILVA","document":"50.729.756"}}
+Data parsed: {
+    "transactionId": "66",
+    "transactionState": "PAGO",
+    "transactionAmount": 14.99,
+    "payer": {
+        "name": "LUIS FERNANDO BORDIGNON DA SILVA",
+        "document": "50.729.756"
+    }
+}
+Transaction ID: 66
+✅ Pending Store encontrada - ID: 66
+Status recebido: PAGO
+🎉 PAGAMENTO APROVADO!
+✅ Loja criada - ID: 3
+✅ Transação criada
+✅ Pending store atualizada
+⚠️ Erro ao criar banco: Erro ao criar banco de dados: SQLSTATE[HY000] [1045] Access denied for user 'root'@'localhost' (using password: YES)
+=== PROCESSAMENTO COMPLETO! ===
+
+=== WEBHOOK RECEBIDO: 2026-01-13 03:19:51 ===
+Headers: {"Content-Length":"150","X-Forwarded-Proto":"https","Cf-Visitor":"{\"scheme\":\"https\"}","Cf-Ipcountry":"BR","Cf-Connecting-Ip":"2a13:9500:d6:100:d556:110d:ab23:1","Cdn-Loop":"cloudflare; loops=1","Accept":"*\/*","Content-Type":"application\/json","Accept-Encoding":"gzip, br","Cf-Ray":"9bcf0202cb5ab3a6-GRU","X-Forwarded-For":"2a13:9500:d6:100:d556:110d:ab23:1","Host":"dashboard.splitstore.com.br"}
+Payload RAW: {"transactionId":"67","transactionState":"PAGO","transactionAmount":14.99,"payer":{"name":"LUIS FERNANDO BORDIGNON DA SILVA","document":"50.729.756"}}
+Data parsed: {
+    "transactionId": "67",
+    "transactionState": "PAGO",
+    "transactionAmount": 14.99,
+    "payer": {
+        "name": "LUIS FERNANDO BORDIGNON DA SILVA",
+        "document": "50.729.756"
+    }
+}
+Transaction ID: 67
+✅ Pending Store encontrada - ID: 67
+Status recebido: PAGO
+🎉 PAGAMENTO APROVADO!
+✅ Loja criada - ID: 4
+✅ Transação criada
+✅ Pending store atualizada
+⚠️ Erro ao criar banco: Erro ao criar banco de dados: SQLSTATE[HY000] [1045] Access denied for user 'root'@'localhost' (using password: YES)
+=== PROCESSAMENTO COMPLETO! ===
