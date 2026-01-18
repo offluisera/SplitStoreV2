@@ -1,8 +1,8 @@
 <?php
 $host = 'localhost';
-$dbname = 'splitstore_auth';
-$username = 'splitstore_auth';
-$password = 'Hn2FY2823ZWGbAyH';
+$dbname = 'splitstore_clientes';
+$username = 'splitstore_clientes';
+$password = 'hRC5kmrhGRSm7CMZ';
 
 try {
     $pdo = new PDO(
